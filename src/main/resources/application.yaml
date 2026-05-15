@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: strava
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/strava
+    username: strava
+    password: strava
+    driver-class-name: org.postgresql.Driver
+
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+logging:
+  file:
+    name: /app/logs/app.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+
+strava:
+  client-id: ${STRAVA_CLIENT_ID:not-set}
+  client-secret: ${STRAVA_CLIENT_SECRET:not-set}
+  redirect-uri: ${STRAVA_REDIRECT_URI:http://localhost:8080/auth/callback}
