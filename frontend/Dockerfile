@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+ARG VITE_SHOW_ACTIVITY_MAP=true
+ENV VITE_SHOW_ACTIVITY_MAP=$VITE_SHOW_ACTIVITY_MAP
 RUN npm run build
 
 FROM nginx:alpine

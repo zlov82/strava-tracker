@@ -149,7 +149,7 @@ const ActivityModal = ({ act, onClose }) => {
             {description}
           </div>
         )}
-        <ActivityMap act={act} />
+        {import.meta.env.VITE_SHOW_ACTIVITY_MAP !== 'false' && <ActivityMap act={act} />}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <DetailStat label="Расстояние"       value={fmtDist(act.distance, act.type)} color={act.type === "Ride" ? C_BIKE : C_SWIM} />
           <DetailStat label="Время в движении"  value={fmtTime(act.moving_time)} />

@@ -23,7 +23,10 @@ services:
       - postgres
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_SHOW_ACTIVITY_MAP: ${SHOW_ACTIVITY_MAP:-true}
     ports:
       - "80:80"
     depends_on:
