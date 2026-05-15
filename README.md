@@ -61,6 +61,7 @@ npm run dev
 | `STRAVA_CLIENT_ID` | Client ID приложения Strava |
 | `STRAVA_CLIENT_SECRET` | Client Secret приложения Strava |
 | `STRAVA_REDIRECT_URI` | URI редиректа после авторизации (по умолчанию `http://localhost/auth/callback`) |
+| `SHOW_ACTIVITY_MAP` | Показывать карту маршрута в деталях активности (по умолчанию `true`). Встраивается в сборку фронтенда, требует пересборки образа. |
 
 ## API
 
