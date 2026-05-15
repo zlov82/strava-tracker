@@ -87,7 +87,7 @@ export default function ActivityMap({ act }) {
           borderRadius: '0 0 10px 10px',
           position: 'relative',
         }}>
-          {expanded && (
+          {expanded && !fullscreen && (
             <>
               <MapInstance polyline={polyline} type={act.type} style={{ height: 260, cursor: 'zoom-in' }} onClick={() => setFullscreen(true)} />
               <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: C_MUTED, pointerEvents: 'none' }}>
@@ -95,6 +95,7 @@ export default function ActivityMap({ act }) {
               </div>
             </>
           )}
+          {expanded && fullscreen && <div style={{ height: 260 }} />}
         </div>
       </div>
 
