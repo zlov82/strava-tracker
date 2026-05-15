@@ -23,9 +23,15 @@ public class StravaActivityDto {
     private Boolean commute;
     private String description;
     private AthleteRef athlete;
+    private MapData map;
 
     @Data
     public static class AthleteRef {
         private Long id;
+    }
+
+    @Data
+    public static class MapData {
+        private String summary_polyline;
     }
 }
