@@ -3,7 +3,7 @@ import L from 'leaflet';
 import polylineDecoder from '@mapbox/polyline';
 import 'leaflet/dist/leaflet.css';
 
-const TYPE_COLOR = { Ride: '#16A97A', Run: '#F59E0B', Swim: '#3B82F6', Walk: '#9CA3AF' };
+const TYPE_COLOR = { Ride: '#6366F1', Run: '#F97316', Swim: '#EC4899', Walk: '#A78BFA' };
 const C_BORDER  = '#2A2F42';
 const C_MUTED   = '#6B7280';
 const C_SURFACE = '#181C27';
@@ -25,8 +25,12 @@ function MapInstance({ polyline, type, style, onClick }) {
       mapRef.current = map;
       initializedRef.current = true;
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-      const line = L.polyline(coords, { color, weight: 3.5, opacity: 0.9 }).addTo(map);
+      const line = L.polyline(coords, { color, weight: 4, opacity: 0.9 }).addTo(map);
       map.fitBounds(line.getBounds(), { padding: [16, 16] });
+
+      const markerOpts = (fillColor) => ({ radius: 6, fillColor, color: '#fff', weight: 2, opacity: 1, fillOpacity: 1 });
+      L.circleMarker(coords[0],                 markerOpts('#22C55E')).addTo(map);
+      L.circleMarker(coords[coords.length - 1], markerOpts('#EF4444')).addTo(map);
     };
 
     // Delay to ensure container has real dimensions (e.g. after CSS transition)
