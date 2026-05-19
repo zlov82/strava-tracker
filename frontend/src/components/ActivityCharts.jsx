@@ -24,20 +24,6 @@ const downsample = (arr) => {
   return arr.filter((_, i) => i % step === 0);
 };
 
-const fmtSeconds = (s) => {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-  return h > 0 ? `${h}:${String(m).padStart(2,'0')}` : `${m}мин`;
-};
-
-const fmtPace = (ms, type) => {
-  if (type === 'Run' || type === 'Walk') {
-    const secPerKm = 1000 / ms;
-    const m = Math.floor(secPerKm / 60);
-    return `${m}:${String(Math.round(secPerKm % 60)).padStart(2,'0')}`;
-  }
-  return `${(ms * 3.6).toFixed(1)}`;
-};
-
 const ChartTooltip = ({ active, payload, label, xFormatter, yFormatter }) => {
   if (!active || !payload?.length) return null;
   const val = payload[0]?.value;
@@ -51,7 +37,10 @@ const ChartTooltip = ({ active, payload, label, xFormatter, yFormatter }) => {
 
 const fmtAxisNum = (v) => typeof v === 'number' ? +v.toFixed(1) : v;
 
-const Chart = ({ title, data, dataKey, color, xKey, xFormatter, yFormatter, area = false }) => {
+const fmtDist = (v) => `${v} км`;
+
+
+const Chart = ({ title, data, dataKey, color, xKey, xFormatter, yFormatter, area = false, stat }) => {
   if (!data || data.length === 0) return null;
   const ChartComp  = area ? AreaChart  : LineChart;
   const SeriesComp = area ? Area : Line;
@@ -64,7 +53,7 @@ const Chart = ({ title, data, dataKey, color, xKey, xFormatter, yFormatter, area
         <ChartComp data={data} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={C_BORDER} />
           <XAxis dataKey={xKey} tickFormatter={xFormatter} tick={{ fontSize: 10, fill: C_MUTED }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 10, fill: C_MUTED }} tickLine={false} axisLine={false} width={48} tickFormatter={fmtAxisNum} />
+          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: C_MUTED }} tickLine={false} axisLine={false} width={48} tickFormatter={fmtAxisNum} />
           <Tooltip content={<ChartTooltip xFormatter={xFormatter} yFormatter={yFormatter} />} />
           <SeriesComp
             type="monotone" dataKey={dataKey}
@@ -74,11 +63,17 @@ const Chart = ({ title, data, dataKey, color, xKey, xFormatter, yFormatter, area
           />
         </ChartComp>
       </ResponsiveContainer>
+      {stat && (
+        <div style={{ marginTop: 6, fontSize: 12, textAlign: 'center' }}>
+          <span style={{ color: C_MUTED }}>{stat.label}: </span>
+          <span style={{ color: C_TEXT, fontWeight: 600 }}>{stat.value}</span>
+        </div>
+      )}
     </div>
   );
 };
 
-export default function ActivityCharts({ streamsRaw, type, loading }) {
+export default function ActivityCharts({ streamsRaw, type, loading, activity }) {
   if (loading) return (
     <div style={{ fontSize: 12, color: C_MUTED, padding: '24px 0', textAlign: 'center' }}>загрузка…</div>
   );
@@ -88,7 +83,6 @@ export default function ActivityCharts({ streamsRaw, type, loading }) {
 
   const s = typeof streamsRaw === 'string' ? JSON.parse(streamsRaw) : streamsRaw;
 
-  const time     = downsample(s.time?.data);
   const distance = downsample(s.distance?.data);
   const hr       = downsample(s.heartrate?.data);
   const vel      = downsample(s.velocity_smooth?.data);
@@ -96,50 +90,58 @@ export default function ActivityCharts({ streamsRaw, type, loading }) {
   const cad      = downsample(s.cadence?.data);
   const watts    = downsample(s.watts?.data);
 
-  const byTime = (values) =>
-    time && values ? time.map((t, i) => ({ t, v: values[i] })) : null;
-
   const byDist = (values) =>
     distance && values ? distance.map((d, i) => ({ d: +(d / 1000).toFixed(2), v: values[i] })) : null;
 
   const isPace = type === 'Run' || type === 'Walk';
   const velLabel    = type === 'Ride' ? 'км/ч' : 'мин/км';
   const velConvert  = (ms) => type === 'Ride' ? +(ms * 3.6).toFixed(1) : +(1000 / ms / 60).toFixed(2);
-  const velData     = vel ? byTime(vel).map(p => ({ ...p, v: velConvert(p.v) })) : null;
+  const velData     = vel ? byDist(vel).map(p => ({ ...p, v: velConvert(p.v) })) : null;
+
+  const avgHr  = activity?.averageHeartrate ? Math.round(activity.averageHeartrate) : null;
+  const avgVel = activity?.average_speed    ? velConvert(activity.average_speed)    : null;
+  const avgCad = activity?.averageCadence   ? Math.round(activity.averageCadence)   : null;
+  const gain   = activity?.elevationM       ? activity.elevationM                   : null;
 
   return (
     <div>
       <Chart
         title="Пульс, уд/мин"
-        data={byTime(hr)}
-        dataKey="v" xKey="t" color={CHART_COLORS.heartrate}
-        xFormatter={fmtSeconds} yFormatter={(v) => `${Math.round(v)}`}
+        data={byDist(hr)}
+        dataKey="v" xKey="d" color={CHART_COLORS.heartrate}
+        xFormatter={fmtDist} yFormatter={(v) => `${Math.round(v)}`}
+        area
+        stat={avgHr != null ? { label: 'Средний пульс', value: `${avgHr} уд/мин` } : null}
       />
       <Chart
         title={isPace ? 'Темп, мин/км' : 'Скорость, км/ч'}
         data={velData}
-        dataKey="v" xKey="t" color={CHART_COLORS.velocity_smooth}
-        xFormatter={fmtSeconds} yFormatter={(v) => `${v} ${velLabel}`}
+        dataKey="v" xKey="d" color={CHART_COLORS.velocity_smooth}
+        xFormatter={fmtDist} yFormatter={(v) => `${v} ${velLabel}`}
+        area
+        stat={avgVel != null ? { label: 'Средняя скорость', value: `${avgVel} ${velLabel}` } : null}
       />
       <Chart
         title="Профиль высот, м"
         data={byDist(alt)}
         dataKey="v" xKey="d" color={CHART_COLORS.altitude}
-        xFormatter={(v) => `${v} км`} yFormatter={(v) => `${Math.round(v)} м`}
+        xFormatter={fmtDist} yFormatter={(v) => `${Math.round(v)} м`}
         area
+        stat={gain != null ? { label: 'Набор высоты', value: `${gain} м` } : null}
       />
       <Chart
         title="Каденс, об/мин"
-        data={byTime(cad)}
-        dataKey="v" xKey="t" color={CHART_COLORS.cadence}
-        xFormatter={fmtSeconds} yFormatter={(v) => `${Math.round(v)}`}
+        data={byDist(cad)}
+        dataKey="v" xKey="d" color={CHART_COLORS.cadence}
+        xFormatter={fmtDist} yFormatter={(v) => `${Math.round(v)}`}
+        stat={avgCad != null ? { label: 'Средний каденс', value: `${avgCad} об/мин` } : null}
       />
       {type === 'Ride' && (
         <Chart
           title="Мощность, Вт"
-          data={byTime(watts)}
-          dataKey="v" xKey="t" color={CHART_COLORS.watts}
-          xFormatter={fmtSeconds} yFormatter={(v) => `${Math.round(v)}`}
+          data={byDist(watts)}
+          dataKey="v" xKey="d" color={CHART_COLORS.watts}
+          xFormatter={fmtDist} yFormatter={(v) => `${Math.round(v)}`}
         />
       )}
     </div>

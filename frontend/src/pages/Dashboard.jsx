@@ -185,6 +185,7 @@ const ActivityModal = ({ act, onClose }) => {
       .then(r => {
         setDescription(r.data.description ?? "");
         setLapsRaw(r.data.lapsRaw ?? null);
+        if (r.data.streamsRaw) setStreamsRaw(r.data.streamsRaw);
       })
       .catch(() => setDescription(""))
       .finally(() => setLoading(false));
@@ -278,7 +279,7 @@ const ActivityModal = ({ act, onClose }) => {
 
         {/* Графики */}
         {tab === "Графики" && (
-          <ActivityCharts streamsRaw={streamsRaw} type={act.type} loading={streamsLoading} />
+          <ActivityCharts streamsRaw={streamsRaw} type={act.type} loading={streamsLoading} activity={act} />
         )}
 
       </div>
