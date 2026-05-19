@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer,
 } from "recharts";
 import axios from "axios";
 import ActivityMap from "../components/ActivityMap";
+import ActivityLaps from "../components/ActivityLaps";
+import ActivityCharts from "../components/ActivityCharts";
 
 // ── API ────────────────────────────────────────────────────────────────────────
 const api = axios.create();
@@ -34,7 +36,7 @@ const MONTHS      = ["Янв","Фев","Мар","Апр","Май","Июн","Ию
 const MONTHS_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 const fmtDist  = (m, t) => t === "Swim" ? `${(m / 1000).toFixed(2)} км` : `${(m / 1000).toFixed(1)} км`;
-const fmtTime  = (s) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}ч ${m}м` : `${m}м`; };
+const fmtTime  = (s) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}ч ${m}мин` : `${m}мин`; };
 const fmtSpeed = (ms, t) => {
   if (t === "Swim") { const p = (100 / ms) / 60; const min = Math.floor(p); return `${min}:${String(Math.round((p - min) * 60)).padStart(2, "0")} /100м`; }
   return `${(ms * 3.6).toFixed(1)} км/ч`;
@@ -59,6 +61,40 @@ const KpiCard = ({ label, value, sub, color }) => (
     {sub && <span style={{ fontSize: 12, color: C_MUTED }}>{sub}</span>}
   </div>
 );
+
+const RecordCard = ({ label, value, name, date, color, onClick }) => (
+  <div onClick={onClick} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 3, cursor: onClick ? "pointer" : "default", transition: "border-color 0.15s" }}
+    onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
+    onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = C_BORDER)}
+  >
+    <span style={{ fontSize: 10, color: C_MUTED, letterSpacing: "0.07em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
+    <span style={{ fontSize: 22, fontWeight: 700, color: color || C_TEXT, fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{value}</span>
+    {name && <span style={{ fontSize: 12, color: C_TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>}
+    {date && <span style={{ fontSize: 11, color: C_MUTED }}>{date}</span>}
+  </div>
+);
+
+const MiniMonthChart = ({ data, dataKey, color, onMonthClick }) => (
+  <ResponsiveContainer width="100%" height={100}>
+    <BarChart data={data} barGap={2} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}
+      onClick={({ activePayload } = {}) => activePayload?.[0] && onMonthClick(activePayload[0].payload.month)}
+      style={{ cursor: "pointer" }}
+    >
+      <CartesianGrid strokeDasharray="3 3" stroke={C_BORDER} vertical={false} />
+      <XAxis dataKey="name" tick={{ fill: C_MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
+      <YAxis tick={{ fill: C_MUTED, fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+      <Tooltip content={({ active, payload, label }) => active && payload?.length && payload[0].value > 0
+        ? <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, color: C_TEXT }}>{label}: <strong>{payload[0].value} км</strong></div>
+        : null}
+        cursor={{ fill: "rgba(255,255,255,0.03)" }}
+      />
+      <Bar dataKey={dataKey} fill={color} radius={[3, 3, 0, 0]} />
+    </BarChart>
+  </ResponsiveContainer>
+);
+
+const bestOf = (acts, key) => acts.length ? acts.reduce((b, a) => (a[key] ?? 0) > (b[key] ?? 0) ? a : b) : null;
+const fmtActDate = (iso) => new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "long" });
 
 const TYPE_META = {
   Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО" },
@@ -109,25 +145,56 @@ const DetailStat = ({ label, value, color }) => (
   </div>
 );
 
-const isIndoorRide = (act) => act.type === "Ride" && (act.trainer || act.sportType === "VirtualRide" || act.rawData?.sport_type === "VirtualRide");
+const isIndoorRide = (act) => act.type === "Ride" && (act.trainer || act.sportType === "VirtualRide");
+
+const TABS = ["Обзор", "Маршрут", "Круги", "Графики"];
 
 const ActivityModal = ({ act, onClose }) => {
-  const [description, setDescription] = useState(act?.description ?? null);
+  const [tab,          setTab]          = useState("Обзор");
+  const [description,  setDescription]  = useState(act?.description ?? null);
+  const [lapsRaw,      setLapsRaw]      = useState(act?.lapsRaw ?? null);
+  const [streamsRaw,   setStreamsRaw]    = useState(act?.streamsRaw ?? null);
+  const [loading,      setLoading]      = useState(false);
+  const [streamsLoading, setStreamsLoading] = useState(false);
 
   useEffect(() => {
     if (!act) return;
+    setTab("Обзор");
     setDescription(act.description ?? null);
-    if (act.description !== null && act.description !== undefined) return;
+    setLapsRaw(act.lapsRaw ?? null);
+    setStreamsRaw(act.streamsRaw ?? null);
+    if (act.activityRaw != null) return;
+    setLoading(true);
     api.get(`/api/activities/${act.stravaId}`)
-      .then(r => setDescription(r.data.description ?? ""))
-      .catch(() => setDescription(""));
+      .then(r => {
+        setDescription(r.data.description ?? "");
+        setLapsRaw(r.data.lapsRaw ?? null);
+      })
+      .catch(() => setDescription(""))
+      .finally(() => setLoading(false));
   }, [act?.stravaId]);
 
+  const onChartsTab = () => {
+    setTab("Графики");
+    if (streamsRaw != null) return;
+    setStreamsLoading(true);
+    api.get(`/api/activities/${act.stravaId}/streams`)
+      .then(r => setStreamsRaw(r.data.streamsRaw ?? null))
+      .catch(() => {})
+      .finally(() => setStreamsLoading(false));
+  };
+
   if (!act) return null;
+
+  const hasMap      = !!(act.mapPolyline || act.activityRaw);
+  const visibleTabs = TABS.filter(t => t !== "Маршрут" || hasMap);
+
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div onClick={e => e.stopPropagation()} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 16, padding: 28, width: "min(560px, 92vw)", maxHeight: "85vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
+
+        {/* Шапка */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <TypeBadge type={act.type} />
@@ -141,44 +208,65 @@ const ActivityModal = ({ act, onClose }) => {
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: C_MUTED, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
         </div>
-        {description === null && (
-          <div style={{ fontSize: 12, color: C_MUTED, marginBottom: 16 }}>загрузка описания…</div>
-        )}
-        {description && (
-          <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C_MUTED, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-            {description}
-          </div>
-        )}
-        {import.meta.env.VITE_SHOW_ACTIVITY_MAP !== 'false' && <ActivityMap act={act} />}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <DetailStat label="Расстояние"       value={fmtDist(act.distance, act.type)} color={act.type === "Ride" ? C_BIKE : C_SWIM} />
-          <DetailStat label="Время в движении"  value={fmtTime(act.moving_time)} />
-          <DetailStat label="Общее время"       value={act.elapsed_time ? fmtTime(act.elapsed_time) : null} />
-          <DetailStat label="Набор высоты"      value={act.elevationM ? `${act.elevationM} м` : null} />
-          <DetailStat label="Ср. скорость"      value={act.average_speed ? fmtSpeed(act.average_speed, act.type) : null} />
-          <DetailStat label="Макс. скорость"    value={(act.rawData?.max_speed ?? act.max_speed) ? fmtSpeed(act.rawData?.max_speed ?? act.max_speed, act.type) : null} />
-          <DetailStat label="Ср. пульс"         value={(act.rawData?.average_heartrate ?? act.averageHeartrate) ? `${Math.round(act.rawData?.average_heartrate ?? act.averageHeartrate)} уд/мин` : null} />
-          <DetailStat label="Макс. пульс"       value={(act.rawData?.max_heartrate ?? act.maxHeartrate) ? `${Math.round(act.rawData?.max_heartrate ?? act.maxHeartrate)} уд/мин` : null} />
-          <DetailStat label="Ср. каденс"        value={(act.rawData?.average_cadence ?? act.averageCadence) ? `${Math.round(act.rawData?.average_cadence ?? act.averageCadence)} об/мин` : null} />
-          <DetailStat label="Мощность"          value={(act.rawData?.average_watts ?? act.averageWatts) ? `${Math.round(act.rawData?.average_watts ?? act.averageWatts)} Вт` : null} />
+
+        {/* Вкладки */}
+        <div style={{ display: "flex", borderBottom: `1px solid ${C_BORDER}`, marginBottom: 20 }}>
+          {visibleTabs.map(t => (
+            <button key={t} onClick={t === "Графики" ? onChartsTab : () => setTab(t)} style={{
+              padding: "8px 16px", background: "none", border: "none",
+              borderBottom: tab === t ? `2px solid ${C_BIKE}` : "2px solid transparent",
+              color: tab === t ? C_TEXT : C_MUTED,
+              cursor: "pointer", fontSize: 13, fontWeight: tab === t ? 600 : 400,
+              marginBottom: -1, transition: "color 0.15s",
+            }}>
+              {t}
+            </button>
+          ))}
         </div>
+
+        {/* Обзор */}
+        {tab === "Обзор" && (
+          <>
+            {description && (
+              <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C_MUTED, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {description}
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <DetailStat label="Расстояние"      value={fmtDist(act.distance, act.type)} color={act.type === "Ride" ? C_BIKE : C_SWIM} />
+              <DetailStat label="Время в движении" value={fmtTime(act.moving_time)} />
+              <DetailStat label="Общее время"      value={act.elapsed_time ? fmtTime(act.elapsed_time) : null} />
+              <DetailStat label="Набор высоты"     value={act.elevationM ? `${act.elevationM} м` : null} />
+              <DetailStat label="Ср. скорость"     value={act.average_speed ? fmtSpeed(act.average_speed, act.type) : null} />
+              <DetailStat label="Макс. скорость"   value={act.max_speed ? fmtSpeed(act.max_speed, act.type) : null} />
+              <DetailStat label="Ср. пульс"        value={act.averageHeartrate ? `${Math.round(act.averageHeartrate)} уд/мин` : null} />
+              <DetailStat label="Макс. пульс"      value={act.maxHeartrate ? `${Math.round(act.maxHeartrate)} уд/мин` : null} />
+              <DetailStat label="Ср. каденс"       value={act.averageCadence ? `${Math.round(act.averageCadence)} об/мин` : null} />
+              <DetailStat label="Мощность"         value={act.averageWatts ? `${Math.round(act.averageWatts)} Вт` : null} />
+            </div>
+          </>
+        )}
+
+        {/* Маршрут */}
+        {tab === "Маршрут" && import.meta.env.VITE_SHOW_ACTIVITY_MAP !== 'false' && (
+          <ActivityMap act={act} standalone />
+        )}
+
+        {/* Круги */}
+        {tab === "Круги" && (
+          <ActivityLaps lapsRaw={lapsRaw} type={act.type} loading={loading} />
+        )}
+
+        {/* Графики */}
+        {tab === "Графики" && (
+          <ActivityCharts streamsRaw={streamsRaw} type={act.type} loading={streamsLoading} />
+        )}
+
       </div>
     </div>
   );
 };
 
-const ChartTooltip = ({ active, payload, label, suffix = "" }) => {
-  if (!active || !payload?.length) return null;
-  if (!payload.some(p => p.value > 0)) return null;
-  return (
-    <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
-      <div style={{ color: C_MUTED, marginBottom: 6, fontWeight: 600 }}>{label}{suffix}</div>
-      {payload.map(p => p.value > 0 ? (
-        <div key={p.name} style={{ color: p.color, marginBottom: 3 }}>{p.name}: <strong>{p.value} км</strong></div>
-      ) : null)}
-    </div>
-  );
-};
 
 const NavBtn = ({ active, color, onClick, children }) => (
   <button onClick={onClick} style={{
@@ -254,6 +342,7 @@ export default function Dashboard() {
       name, month: idx,
       bikeKm: +(acts.filter(a => a.type === "Ride").reduce((s, a) => s + a.distance, 0) / 1000).toFixed(1),
       swimKm: +(acts.filter(a => a.type === "Swim").reduce((s, a) => s + a.distance, 0) / 1000).toFixed(1),
+      runKm:  +(acts.filter(a => a.type === "Run" ).reduce((s, a) => s + a.distance, 0) / 1000).toFixed(1),
     };
   }), [yearActs]);
 
@@ -329,26 +418,63 @@ export default function Dashboard() {
           <KpiCard label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
         </div>
 
-        {/* Chart */}
-        {selectedMonth === null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px", marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 16 }}>
-            Объём по месяцам, км — {selectedYear}
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={monthlyData} barGap={3} style={{ cursor: "pointer" }}
-              onClick={({ activePayload } = {}) => activePayload && setSelectedMonth(activePayload[0]?.payload?.month)}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={C_BORDER} vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: C_MUTED, fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: C_MUTED, fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-              <Legend formatter={v => <span style={{ fontSize: 12, color: C_MUTED }}>{v}</span>} wrapperStyle={{ paddingTop: 12 }} />
-              <Bar dataKey="bikeKm" name="Велосипед" fill={C_BIKE} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="swimKm" name="Плавание"  fill={C_SWIM} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div style={{ fontSize: 11, color: C_MUTED, marginTop: 4 }}>💡 Кликни на месяц чтобы отфильтровать активности</div>
-        </div>}
+        {/* Рекорды года */}
+        {selectedMonth === null && (() => {
+          const longestRide  = bestOf(bikeActs, "distance");
+          const highestRide  = bestOf(bikeActs, "elevationM");
+          const fastestRide  = bestOf(bikeActs.filter(a => a.distance > 10000), "average_speed");
+          const longestSwim  = bestOf(swimActs, "distance");
+          const longestSwimT = bestOf(swimActs, "moving_time");
+          const longestRun   = bestOf(runActs,  "distance");
+
+          const groups = [
+            bikeActs.length > 0 && {
+              label: "🚴 Велосипед", color: C_BIKE, dataKey: "bikeKm",
+              records: [
+                longestRide  && { label: "Самая длинная поездка",          value: `${(longestRide.distance/1000).toFixed(1)} км`,         act: longestRide },
+                highestRide  && { label: "Наибольший набор высоты",        value: `${highestRide.elevationM.toFixed(0)} м`,               act: highestRide },
+                fastestRide  && { label: "Самая быстрая средняя скорость", value: `${(fastestRide.average_speed * 3.6).toFixed(1)} км/ч`, act: fastestRide },
+              ].filter(Boolean),
+            },
+            swimActs.length > 0 && {
+              label: "🏊 Плавание", color: C_SWIM, dataKey: "swimKm",
+              records: [
+                longestSwim  && { label: "Самое длинное плавание",         value: `${(longestSwim.distance/1000).toFixed(2)} км`,         act: longestSwim },
+                longestSwimT && { label: "Самый долгий заплыв",            value: fmtTime(longestSwimT.moving_time),                     act: longestSwimT },
+              ].filter(Boolean),
+            },
+            runActs.length > 0 && {
+              label: "🏃 Бег", color: "#F59E0B", dataKey: "runKm",
+              records: [
+                longestRun   && { label: "Самый длинный забег",            value: `${(longestRun.distance/1000).toFixed(1)} км`,          act: longestRun },
+              ].filter(Boolean),
+            },
+          ].filter(Boolean);
+
+          if (groups.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
+                Рекорды {selectedYear}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {groups.map(({ label, color, dataKey, records }) => (
+                  <div key={label} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>{label}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 10, marginBottom: 16 }}>
+                      {records.map(({ label: rl, value, act }) => (
+                        <RecordCard key={rl} label={rl} value={value} name={act.name} date={fmtActDate(act.start_date)} color={color} onClick={() => setSelectedAct(act)} />
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: C_MUTED, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>Объём по месяцам, км</div>
+                    <MiniMonthChart data={monthlyData} dataKey={dataKey} color={color} onMonthClick={setSelectedMonth} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
 
         {/* Activity list — только на вкладке конкретного месяца */}
         {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px" }}>

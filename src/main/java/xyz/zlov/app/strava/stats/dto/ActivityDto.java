@@ -24,5 +24,8 @@ public record ActivityDto(
         boolean trainer,
         boolean commute,
         String description,
-        @JsonRawValue String rawData
+        String mapPolyline,
+        @JsonRawValue String activityRaw,
+        @JsonRawValue String lapsRaw,
+        @JsonRawValue String streamsRaw
 ) {}

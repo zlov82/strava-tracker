@@ -24,13 +24,39 @@ public class ActivityService {
     private final StravaClient stravaClient;
 
     @Transactional
-    public Optional<Activity> fetchAndCacheDescription(Long stravaId) {
+    public Optional<Activity> fetchAndCacheDetails(Long stravaId) {
         Activity activity = activityRepository.findByStravaId(stravaId).orElse(null);
         if (activity == null) return Optional.empty();
-        if (activity.getDescription() != null) return Optional.of(activity);
+        if (activity.getActivityRaw() != null) return Optional.of(activity);
 
-        StravaActivityDto dto = stravaClient.getActivity(stravaId);
-        activity.setDescription(dto.getDescription() != null ? dto.getDescription() : "");
+        String activityJson = stravaClient.getActivityRaw(stravaId);
+        String lapsJson     = stravaClient.getActivityLapsRaw(stravaId);
+
+        activity.setActivityRaw(activityJson);
+        activity.setLapsRaw(lapsJson);
+
+        try {
+            var node = MAPPER.readTree(activityJson);
+            if (node.has("description") && !node.get("description").isNull()) {
+                activity.setDescription(node.get("description").asText());
+            } else {
+                activity.setDescription("");
+            }
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse activity JSON for stravaId={}", stravaId);
+        }
+
+        activityRepository.save(activity);
+        return Optional.of(activity);
+    }
+
+    @Transactional
+    public Optional<Activity> fetchAndCacheStreams(Long stravaId) {
+        Activity activity = activityRepository.findByStravaId(stravaId).orElse(null);
+        if (activity == null) return Optional.empty();
+        if (activity.getStreamsRaw() != null) return Optional.of(activity);
+
+        activity.setStreamsRaw(stravaClient.getActivityStreamsRaw(stravaId));
         activityRepository.save(activity);
         return Optional.of(activity);
     }
@@ -64,12 +90,8 @@ public class ActivityService {
         activity.setAverageWatts(dto.getAverage_watts());
         activity.setDescription(dto.getDescription());
         activity.setTrainer(dto.getTrainer() != null && dto.getTrainer());
-        try {
-            activity.setRawData(MAPPER.writeValueAsString(dto));
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize raw activity data for stravaId={}", dto.getId());
-        }
         activity.setCommute(dto.getCommute() != null && dto.getCommute());
+        activity.setMapPolyline(dto.getMap() != null ? dto.getMap().getSummary_polyline() : null);
     }
 
     private double orZero(Double value) {

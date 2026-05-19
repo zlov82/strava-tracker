@@ -69,9 +69,20 @@ public class Activity {
     @Column(columnDefinition = "text")
     private String description;
 
+    @Column(name = "map_polyline", columnDefinition = "text")
+    private String mapPolyline;
+
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private String rawData;
+    @Column(name = "activity_raw", columnDefinition = "jsonb")
+    private String activityRaw;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "laps_raw", columnDefinition = "jsonb")
+    private String lapsRaw;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "streams_raw", columnDefinition = "jsonb")
+    private String streamsRaw;
 
     @Column(nullable = false)
     private Boolean trainer = false;

@@ -48,12 +48,16 @@ function MapInstance({ polyline, type, style, onClick }) {
   );
 }
 
-export default function ActivityMap({ act }) {
+export default function ActivityMap({ act, standalone = false }) {
   const [expanded,   setExpanded]   = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const rawData  = act.rawData ? (typeof act.rawData === 'string' ? JSON.parse(act.rawData) : act.rawData) : null;
-  const polyline = rawData?.map?.summary_polyline;
+  const activityRaw = act.activityRaw
+    ? (typeof act.activityRaw === 'string' ? JSON.parse(act.activityRaw) : act.activityRaw)
+    : null;
+  const polyline = activityRaw?.map?.polyline
+                ?? activityRaw?.map?.summary_polyline
+                ?? act.mapPolyline;
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -64,9 +68,44 @@ export default function ActivityMap({ act }) {
 
   if (!polyline) return null;
 
+  const fullscreenOverlay = fullscreen && (
+    <div
+      onClick={() => setFullscreen(false)}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', width: '96vw', height: '90vh', borderRadius: 14, overflow: 'hidden', border: `1px solid ${C_BORDER}` }}>
+        <MapInstance polyline={polyline} type={act.type} style={{ width: '100%', height: '100%' }} />
+        <button
+          onClick={() => setFullscreen(false)}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, background: 'rgba(15,17,23,0.85)', border: `1px solid ${C_BORDER}`, borderRadius: 8, color: C_MUTED, fontSize: 18, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+
+  if (standalone) {
+    return (
+      <>
+        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: `1px solid ${C_BORDER}` }}>
+          {!fullscreen
+            ? <>
+                <MapInstance polyline={polyline} type={act.type} style={{ height: 320, cursor: 'zoom-in' }} onClick={() => setFullscreen(true)} />
+                <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: C_MUTED, pointerEvents: 'none' }}>
+                  нажми для полного экрана
+                </div>
+              </>
+            : <div style={{ height: 320 }} />
+          }
+        </div>
+        {fullscreenOverlay}
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Inline collapsible map */}
       <div style={{ marginBottom: 16 }}>
         <button
           onClick={() => setExpanded(v => !v)}
@@ -102,24 +141,7 @@ export default function ActivityMap({ act }) {
           {expanded && fullscreen && <div style={{ height: 260 }} />}
         </div>
       </div>
-
-      {/* Fullscreen overlay */}
-      {fullscreen && (
-        <div
-          onClick={() => setFullscreen(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', width: '96vw', height: '90vh', borderRadius: 14, overflow: 'hidden', border: `1px solid ${C_BORDER}` }}>
-            <MapInstance polyline={polyline} type={act.type} style={{ width: '100%', height: '100%' }} />
-            <button
-              onClick={() => setFullscreen(false)}
-              style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, background: 'rgba(15,17,23,0.85)', border: `1px solid ${C_BORDER}`, borderRadius: 8, color: C_MUTED, fontSize: 18, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+      {fullscreenOverlay}
     </>
   );
 }

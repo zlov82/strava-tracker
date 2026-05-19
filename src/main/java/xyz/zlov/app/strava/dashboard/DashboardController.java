@@ -71,7 +71,14 @@ public class DashboardController {
 
     @GetMapping("/activities/{stravaId}")
     public ResponseEntity<ActivityDto> activity(@PathVariable Long stravaId) {
-        return activityService.fetchAndCacheDescription(stravaId)
+        return activityService.fetchAndCacheDetails(stravaId)
+                .map(a -> ResponseEntity.ok(toDto(a)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/activities/{stravaId}/streams")
+    public ResponseEntity<ActivityDto> streams(@PathVariable Long stravaId) {
+        return activityService.fetchAndCacheStreams(stravaId)
                 .map(a -> ResponseEntity.ok(toDto(a)))
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -105,7 +112,10 @@ public class DashboardController {
                 Boolean.TRUE.equals(a.getTrainer()),
                 Boolean.TRUE.equals(a.getCommute()),
                 a.getDescription(),
-                a.getRawData()
+                a.getMapPolyline(),
+                a.getActivityRaw(),
+                a.getLapsRaw(),
+                a.getStreamsRaw()
         );
     }
 }

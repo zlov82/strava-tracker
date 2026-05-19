@@ -30,12 +30,28 @@ public class StravaClient {
                 .body(StravaAthleteDto.class);
     }
 
-    public StravaActivityDto getActivity(long id) {
+    public String getActivityRaw(long id) {
         return restClient.get()
                 .uri(BASE_URL + "/activities/{id}", id)
                 .header("Authorization", "Bearer " + tokenService.getValidAccessToken())
                 .retrieve()
-                .body(StravaActivityDto.class);
+                .body(String.class);
+    }
+
+    public String getActivityLapsRaw(long id) {
+        return restClient.get()
+                .uri(BASE_URL + "/activities/{id}/laps", id)
+                .header("Authorization", "Bearer " + tokenService.getValidAccessToken())
+                .retrieve()
+                .body(String.class);
+    }
+
+    public String getActivityStreamsRaw(long id) {
+        return restClient.get()
+                .uri(BASE_URL + "/activities/{id}/streams?keys=time,distance,altitude,velocity_smooth,heartrate,cadence,watts&key_by_type=true", id)
+                .header("Authorization", "Bearer " + tokenService.getValidAccessToken())
+                .retrieve()
+                .body(String.class);
     }
 
     public List<StravaActivityDto> getActivities(long after, int page) {
