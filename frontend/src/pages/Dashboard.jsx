@@ -147,6 +147,22 @@ const DetailStat = ({ label, value, color }) => (
 
 const isIndoorRide = (act) => act.type === "Ride" && (act.trainer || act.sportType === "VirtualRide");
 
+const CopyLinkButton = ({ stravaId }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    const url = `${window.location.origin}${window.location.pathname}?activity=${stravaId}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button onClick={copy} title="Скопировать ссылку" style={{ background: "none", border: `1px solid ${C_BORDER}`, borderRadius: 8, color: copied ? C_BIKE : C_MUTED, fontSize: 13, cursor: "pointer", padding: "2px 10px", transition: "color 0.2s, border-color 0.2s", borderColor: copied ? C_BIKE : C_BORDER }}>
+      {copied ? "✓ скопировано" : "🔗"}
+    </button>
+  );
+};
+
 const TABS = ["Обзор", "Маршрут", "Круги", "Графики"];
 
 const ActivityModal = ({ act, onClose }) => {
@@ -206,7 +222,10 @@ const ActivityModal = ({ act, onClose }) => {
               {new Date(act.start_date).toLocaleString("ru", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C_MUTED, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <CopyLinkButton stravaId={act.stravaId} />
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C_MUTED, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
         </div>
 
         {/* Вкладки */}
@@ -287,6 +306,17 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear]   = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedAct, setSelectedAct]     = useState(null);
+
+  const openActivity = (act) => {
+    setSelectedAct(act);
+    window.history.pushState({}, '', `?activity=${act.stravaId}`);
+  };
+
+  const closeActivity = () => {
+    setSelectedAct(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
   useEffect(() => {
     Promise.all([fetchAthlete(), fetchActivities(), fetchSync()])
       .then(([ath, acts, syncData]) => {
@@ -298,6 +328,11 @@ export default function Dashboard() {
           setSelectedYear(years[years.length - 1]);
         }
         setLoading(false);
+        const paramId = new URLSearchParams(window.location.search).get('activity');
+        if (paramId) {
+          const found = acts.find(a => String(a.stravaId) === paramId);
+          if (found) setSelectedAct(found);
+        }
       });
 
     const timer = setInterval(() => {
@@ -374,7 +409,7 @@ export default function Dashboard() {
 
         }
       `}</style>
-      <ActivityModal act={selectedAct} onClose={() => setSelectedAct(null)} />
+      <ActivityModal act={selectedAct} onClose={closeActivity} />
 
       {/* Header */}
       <div className="header-pad" style={{ borderBottom: `1px solid ${C_BORDER}`, padding: "16px 32px", position: "sticky", top: 0, background: C_BG, zIndex: 10 }}>
@@ -463,7 +498,7 @@ export default function Dashboard() {
                     <div style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>{label}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 10, marginBottom: 16 }}>
                       {records.map(({ label: rl, value, act }) => (
-                        <RecordCard key={rl} label={rl} value={value} name={act.name} date={fmtActDate(act.start_date)} color={color} onClick={() => setSelectedAct(act)} />
+                        <RecordCard key={rl} label={rl} value={value} name={act.name} date={fmtActDate(act.start_date)} color={color} onClick={() => openActivity(act)} />
                       ))}
                     </div>
                     <div style={{ fontSize: 11, color: C_MUTED, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>Объём по месяцам, км</div>
@@ -487,7 +522,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {filtered.length === 0
               ? <div style={{ color: C_MUTED, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Нет активностей за этот период</div>
-              : filtered.map(act => <ActivityRow key={act.stravaId} act={act} onClick={() => setSelectedAct(act)} />)
+              : filtered.map(act => <ActivityRow key={act.stravaId} act={act} onClick={() => openActivity(act)} />)
             }
           </div>
         </div>}
