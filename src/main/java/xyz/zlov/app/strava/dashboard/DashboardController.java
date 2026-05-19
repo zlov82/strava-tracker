@@ -88,10 +88,18 @@ public class DashboardController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return activityRepository.findAllByOrderByStartDateDesc(PageRequest.of(page, size))
-                .map(this::toDto);
+                .map(this::toListDto);
     }
 
     private ActivityDto toDto(Activity a) {
+        return buildDto(a, a.getActivityRaw(), a.getLapsRaw(), a.getStreamsRaw());
+    }
+
+    private ActivityDto toListDto(Activity a) {
+        return buildDto(a, null, null, null);
+    }
+
+    private ActivityDto buildDto(Activity a, String activityRaw, String lapsRaw, String streamsRaw) {
         return new ActivityDto(
                 a.getId(),
                 a.getStravaId(),
@@ -113,9 +121,9 @@ public class DashboardController {
                 Boolean.TRUE.equals(a.getCommute()),
                 a.getDescription(),
                 a.getMapPolyline(),
-                a.getActivityRaw(),
-                a.getLapsRaw(),
-                a.getStreamsRaw()
+                activityRaw,
+                lapsRaw,
+                streamsRaw
         );
     }
 }
