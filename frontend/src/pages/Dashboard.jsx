@@ -97,12 +97,88 @@ const bestOf = (acts, key) => acts.length ? acts.reduce((b, a) => (a[key] ?? 0) 
 const fmtActDate = (iso) => new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "long" });
 
 const TYPE_META = {
-  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО" },
-  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ" },
-  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ" },
-  Walk:  { bg: "#F3F4F6", fg: "#374151", label: "🚶 ХОДЬБА" },
+  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО",      dot: "#16A97A" },
+  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ",  dot: "#3B82F6" },
+  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ",       dot: "#F59E0B" },
+  Walk:  { bg: "#F3F4F6", fg: "#374151", label: "🚶 ХОДЬБА",    dot: "#9CA3AF" },
 };
-const DEFAULT_TYPE = { bg: "#F3F4F6", fg: "#374151", label: "🏅 ДРУГОЕ" };
+const DEFAULT_TYPE = { bg: "#F3F4F6", fg: "#374151", label: "🏅 ДРУГОЕ", dot: "#6B7280" };
+
+const DOW_LABELS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+
+const MonthCalendar = ({ activities, year, month }) => {
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDow = (firstDay.getDay() + 6) % 7;
+
+  const byDay = {};
+  for (const act of activities) {
+    const d = new Date(act.start_date).getDate();
+    if (!byDay[d]) byDay[d] = [];
+    byDay[d].push(act.type);
+  }
+
+  const presentTypes = [...new Set(activities.map(a => a.type))];
+
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+  return (
+    <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", marginBottom: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
+        Календарь активностей
+      </div>
+      {/* Legend — только присутствующие типы */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        {Object.entries(TYPE_META).filter(([type]) => presentTypes.includes(type)).map(([type, meta]) => (
+          <div key={type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: meta.dot, flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: C_MUTED }}>{meta.label.replace(/[^ ]+ /, "")}</span>
+          </div>
+        ))}
+      </div>
+      {/* Day-of-week headers */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 4 }}>
+        {DOW_LABELS.map(d => (
+          <div key={d} style={{ textAlign: "center", fontSize: 11, color: C_MUTED, fontWeight: 600, padding: "2px 0" }}>{d}</div>
+        ))}
+      </div>
+      {/* Day cells */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e${idx}`} />;
+          const types = byDay[day] || [];
+          const isToday = isCurrentMonth && today.getDate() === day;
+          return (
+            <div key={day} style={{
+              borderRadius: 8,
+              padding: "6px 2px 5px",
+              background: types.length > 0 ? C_SURF2 : "transparent",
+              border: `1px solid ${isToday ? C_BIKE : types.length > 0 ? C_BORDER : "transparent"}`,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              minHeight: 44,
+            }}>
+              <span style={{ fontSize: 12, color: isToday ? C_BIKE : types.length > 0 ? C_TEXT : C_MUTED, fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                {day}
+              </span>
+              {types.length > 0 && (
+                <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
+                  {types.map((t, i) => (
+                    <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: (TYPE_META[t] || DEFAULT_TYPE).dot, flexShrink: 0 }} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const TypeBadge = ({ type }) => {
   const meta = TYPE_META[type] || DEFAULT_TYPE;
@@ -511,6 +587,11 @@ export default function Dashboard() {
           );
         })()}
 
+
+        {/* Календарь месяца — при >10 активностях */}
+        {selectedMonth !== null && filtered.length > 10 && (
+          <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
+        )}
 
         {/* Activity list — только на вкладке конкретного месяца */}
         {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px" }}>
