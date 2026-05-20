@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { Bike, Waves, SportShoe, Footprints, Timer, Hash } from "lucide-react";
 import axios from "axios";
 import ActivityMap from "../components/ActivityMap";
 import ActivityLaps from "../components/ActivityLaps";
@@ -36,7 +37,7 @@ const MONTHS      = ["Янв","Фев","Мар","Апр","Май","Июн","Ию
 const MONTHS_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 const fmtDist  = (m, t) => t === "Swim" ? `${(m / 1000).toFixed(2)} км` : `${(m / 1000).toFixed(1)} км`;
-const fmtTime  = (s) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}ч ${m}мин` : `${m}мин`; };
+const fmtTime  = (s) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h} ч ${m} мин` : `${m} мин`; };
 const fmtSpeed = (ms, t) => {
   if (t === "Swim") { const p = (100 / ms) / 60; const min = Math.floor(p); return `${min}:${String(Math.round((p - min) * 60)).padStart(2, "0")} /100м`; }
   return `${(ms * 3.6).toFixed(1)} км/ч`;
@@ -54,9 +55,12 @@ const C_TEXT    = "#E8EAF0";
 const C_MUTED   = "#6B7280";
 
 // ── Components ─────────────────────────────────────────────────────────────────
-const KpiCard = ({ label, value, sub, color }) => (
+const KpiCard = ({ label, icon: Icon, value, sub, color }) => (
   <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
-    <span style={{ fontSize: 11, color: C_MUTED, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      {Icon && <Icon size={11} color={C_MUTED} strokeWidth={2} />}
+      <span style={{ fontSize: 11, color: C_MUTED, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+    </div>
     <span style={{ fontSize: 26, fontWeight: 700, color: color || C_TEXT, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{value}</span>
     {sub && <span style={{ fontSize: 12, color: C_MUTED }}>{sub}</span>}
   </div>
@@ -97,12 +101,12 @@ const bestOf = (acts, key) => acts.length ? acts.reduce((b, a) => (a[key] ?? 0) 
 const fmtActDate = (iso) => new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "long" });
 
 const TYPE_META = {
-  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО",      dot: "#16A97A" },
-  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ",  dot: "#3B82F6" },
-  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ",       dot: "#F59E0B" },
-  Walk:  { bg: "#F3F4F6", fg: "#374151", label: "🚶 ХОДЬБА",    dot: "#9CA3AF" },
+  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО",      dot: "#16A97A", icon: Bike,       color: "#16A97A" },
+  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ",  dot: "#3B82F6", icon: Waves,      color: "#3B82F6" },
+  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ",       dot: "#F59E0B", icon: SportShoe,  color: "#F59E0B" },
+  Walk:  { bg: "#F3F4F6", fg: "#374151", label: "🚶 ХОДЬБА",    dot: "#9CA3AF", icon: Footprints, color: "#9CA3AF" },
 };
-const DEFAULT_TYPE = { bg: "#F3F4F6", fg: "#374151", label: "🏅 ДРУГОЕ", dot: "#6B7280" };
+const DEFAULT_TYPE = { bg: "#F3F4F6", fg: "#374151", label: "🏅 ДРУГОЕ", dot: "#6B7280", icon: null, color: "#6B7280" };
 
 const DOW_LABELS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 
@@ -128,50 +132,72 @@ const MonthCalendar = ({ activities, year, month }) => {
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
   return (
-    <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", marginBottom: 16 }}>
+    <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", flexShrink: 0 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
         Календарь активностей
       </div>
-      {/* Legend — только присутствующие типы */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        {Object.entries(TYPE_META).filter(([type]) => presentTypes.includes(type)).map(([type, meta]) => (
-          <div key={type} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: meta.dot, flexShrink: 0 }} />
-            <span style={{ fontSize: 10, color: C_MUTED }}>{meta.label.replace(/[^ ]+ /, "")}</span>
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        {Object.entries(TYPE_META).filter(([type]) => presentTypes.includes(type)).map(([type, meta]) => {
+          const Icon = meta.icon;
+          return (
+            <div key={type} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 18, height: 18, borderRadius: "50%", background: C_TEXT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {Icon && <Icon size={10} color={C_BG} strokeWidth={2} />}
+              </div>
+              <span style={{ fontSize: 10, color: C_MUTED }}>{meta.label.replace(/[^ ]+ /, "")}</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* DOW headers */}
+      <div className="cal-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7, 36px)", gap: 4, marginBottom: 4 }}>
+        {DOW_LABELS.map(d => (
+          <div key={d} style={{ display: "flex", justifyContent: "center" }}>
+            <span style={{ fontSize: 10, color: C_MUTED, fontWeight: 600 }}>{d}</span>
           </div>
         ))}
       </div>
-      {/* Day-of-week headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 4 }}>
-        {DOW_LABELS.map(d => (
-          <div key={d} style={{ textAlign: "center", fontSize: 11, color: C_MUTED, fontWeight: 600, padding: "2px 0" }}>{d}</div>
-        ))}
-      </div>
       {/* Day cells */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      <div className="cal-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7, 36px)", gap: 4 }}>
         {cells.map((day, idx) => {
           if (!day) return <div key={`e${idx}`} />;
           const types = byDay[day] || [];
           const isToday = isCurrentMonth && today.getDate() === day;
+          const hasActivity = types.length > 0;
+          const primaryMeta = hasActivity ? (TYPE_META[types[0]] || DEFAULT_TYPE) : null;
+          const PrimaryIcon = primaryMeta?.icon ?? null;
+          const extra = types.length - 1;
+          const circleColor = isToday && hasActivity ? C_BIKE : hasActivity ? C_TEXT : "transparent";
+          const borderColor = isToday ? C_BIKE : hasActivity ? C_TEXT : C_BORDER;
           return (
-            <div key={day} style={{
-              borderRadius: 8,
-              padding: "6px 2px 5px",
-              background: types.length > 0 ? C_SURF2 : "transparent",
-              border: `1px solid ${isToday ? C_BIKE : types.length > 0 ? C_BORDER : "transparent"}`,
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              minHeight: 44,
-            }}>
-              <span style={{ fontSize: 12, color: isToday ? C_BIKE : types.length > 0 ? C_TEXT : C_MUTED, fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                {day}
-              </span>
-              {types.length > 0 && (
-                <div style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
-                  {types.map((t, i) => (
-                    <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: (TYPE_META[t] || DEFAULT_TYPE).dot, flexShrink: 0 }} />
-                  ))}
-                </div>
-              )}
+            <div key={day} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="cal-circle" style={{
+                width: 36, height: 36, borderRadius: "50%",
+                background: circleColor,
+                border: `2px solid ${borderColor}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                position: "relative", flexShrink: 0,
+              }}>
+                {hasActivity ? (
+                  <>
+                    {PrimaryIcon && <PrimaryIcon size={20} color={C_BG} strokeWidth={1.75} />}
+                    {extra > 0 && (
+                      <div style={{
+                        position: "absolute", top: -3, right: -3,
+                        width: 14, height: 14, borderRadius: "50%",
+                        background: C_BIKE, border: `1.5px solid ${C_BG}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 7, fontWeight: 700, color: C_BG,
+                      }}>+{extra}</div>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ fontSize: 11, color: isToday ? C_BIKE : C_MUTED, fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                    {day}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
@@ -182,10 +208,12 @@ const MonthCalendar = ({ activities, year, month }) => {
 
 const TypeBadge = ({ type }) => {
   const meta = TYPE_META[type] || DEFAULT_TYPE;
+  const Icon = meta.icon;
   return (
-    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap", background: meta.bg, color: meta.fg, display: "inline-block", minWidth: 88, textAlign: "center" }}>
-      {meta.label}
-    </span>
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", padding: "3px 10px 3px 7px", borderRadius: 20, whiteSpace: "nowrap", background: meta.bg, color: meta.fg, display: "inline-flex", alignItems: "center", gap: 5, minWidth: 88 }}>
+      {Icon && <Icon size={12} color={meta.fg} strokeWidth={2} />}
+      {meta.label.replace(/[^ ]+ /, "")}
+    </div>
   );
 };
 
@@ -477,9 +505,15 @@ export default function Dashboard() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         .month-nav { overflow-x: auto; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
         .month-nav::-webkit-scrollbar { display: none; }
+        .month-kpi-cal { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; margin: 24px 0; }
+        .month-kpi-area { flex: 1; min-width: 0; }
         @media (max-width: 640px) {
           .act-row { grid-template-columns: auto 1fr auto !important; }
           .act-time, .act-speed { display: none !important; }
+          .month-kpi-cal { flex-direction: column !important; align-items: stretch !important; }
+          .cal-grid { grid-template-columns: repeat(7, 1fr) !important; }
+          .cal-circle { width: 32px !important; height: 32px !important; }
+          .cal-circle svg { width: 16px !important; height: 16px !important; }
           .header-pad { padding: 12px 16px !important; }
           .content-pad { padding: 0 16px !important; }
           .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -520,15 +554,31 @@ export default function Dashboard() {
       </div>
 
       <div className="content-pad" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
-        {/* KPI */}
-        <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
-          {(selectedMonth === null || totalBikeKm > 0) && <KpiCard label="🚴 Велосипед" value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  color={C_BIKE} />}
-          {(selectedMonth === null || totalSwimKm > 0) && <KpiCard label="🏊 Плавание" value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   color={C_SWIM} />}
-          {(selectedMonth === null || totalRunKm > 0)  && <KpiCard label="🏃 Бег"      value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  color="#F59E0B" />}
-          {(selectedMonth === null || totalWalkKm > 0) && <KpiCard label="🚶 Ходьба"   value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} color="#9CA3AF" />}
-          {selectedMonth !== null && <KpiCard label="Активностей" value={filtered.length} sub="за месяц" />}
-          <KpiCard label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
-        </div>
+        {/* KPI + Календарь */}
+        {selectedMonth !== null && filtered.length > 10 ? (
+          <div className="month-kpi-cal">
+            <div className="month-kpi-area">
+              <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+                {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  color={C_BIKE} />}
+                {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   color={C_SWIM} />}
+                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  color="#F59E0B" />}
+                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} color="#9CA3AF" />}
+                <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />
+                <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
+              </div>
+            </div>
+            <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
+          </div>
+        ) : (
+          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
+            {(selectedMonth === null || totalBikeKm > 0) && <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  color={C_BIKE} />}
+            {(selectedMonth === null || totalSwimKm > 0) && <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   color={C_SWIM} />}
+            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  color="#F59E0B" />}
+            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} color="#9CA3AF" />}
+            {selectedMonth !== null && <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />}
+            <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
+          </div>
+        )}
 
         {/* Рекорды года */}
         {selectedMonth === null && (() => {
@@ -541,7 +591,7 @@ export default function Dashboard() {
 
           const groups = [
             bikeActs.length > 0 && {
-              label: "🚴 Велосипед", color: C_BIKE, dataKey: "bikeKm",
+              label: "Велосипед", icon: Bike, color: C_BIKE, dataKey: "bikeKm",
               records: [
                 longestRide  && { label: "Самая длинная поездка",          value: `${(longestRide.distance/1000).toFixed(1)} км`,         act: longestRide },
                 highestRide  && { label: "Наибольший набор высоты",        value: `${highestRide.elevationM.toFixed(0)} м`,               act: highestRide },
@@ -549,14 +599,14 @@ export default function Dashboard() {
               ].filter(Boolean),
             },
             swimActs.length > 0 && {
-              label: "🏊 Плавание", color: C_SWIM, dataKey: "swimKm",
+              label: "Плавание", icon: Waves, color: C_SWIM, dataKey: "swimKm",
               records: [
                 longestSwim  && { label: "Самое длинное плавание",         value: `${(longestSwim.distance/1000).toFixed(2)} км`,         act: longestSwim },
                 longestSwimT && { label: "Самый долгий заплыв",            value: fmtTime(longestSwimT.moving_time),                     act: longestSwimT },
               ].filter(Boolean),
             },
             runActs.length > 0 && {
-              label: "🏃 Бег", color: "#F59E0B", dataKey: "runKm",
+              label: "Бег", icon: SportShoe, color: "#F59E0B", dataKey: "runKm",
               records: [
                 longestRun   && { label: "Самый длинный забег",            value: `${(longestRun.distance/1000).toFixed(1)} км`,          act: longestRun },
               ].filter(Boolean),
@@ -570,9 +620,12 @@ export default function Dashboard() {
                 Рекорды {selectedYear}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {groups.map(({ label, color, dataKey, records }) => (
+                {groups.map(({ label, icon: Icon, color, dataKey, records }) => (
                   <div key={label} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px" }}>
-                    <div style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 12 }}>{label}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                      {Icon && <Icon size={12} color={color} strokeWidth={2} />}
+                      <span style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</span>
+                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 10, marginBottom: 16 }}>
                       {records.map(({ label: rl, value, act }) => (
                         <RecordCard key={rl} label={rl} value={value} name={act.name} date={fmtActDate(act.start_date)} color={color} onClick={() => openActivity(act)} />
@@ -587,11 +640,6 @@ export default function Dashboard() {
           );
         })()}
 
-
-        {/* Календарь месяца — при >10 активностях */}
-        {selectedMonth !== null && filtered.length > 10 && (
-          <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
-        )}
 
         {/* Activity list — только на вкладке конкретного месяца */}
         {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px" }}>
