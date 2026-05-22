@@ -158,6 +158,8 @@ erDiagram
 | `GET` | `/api/activities` | `page=0`, `size=20` | Список активностей с пагинацией |
 | `GET` | `/api/activities/{stravaId}` | — | Детали активности; при первом запросе лениво загружает и кэширует полный ответ Strava (`activity_raw`, `laps_raw`) |
 | `GET` | `/api/activities/{stravaId}/streams` | — | Временны́е ряды активности; при первом запросе лениво загружает и кэширует стримы (`streams_raw`) |
+| `GET` | `/api/activities/export/ride/{stravaId}` | — | Экспорт одной велотренировки в формате `TrainerRideDto` |
+| `POST` | `/api/activities/export/rides` | body: `[id, ...]` | Пакетный экспорт велотренировок; тело — JSON-массив `stravaId` |
 | `GET` | `/api/athlete` | — | Имя и аватар атлета (из Strava) |
 
 ### Статистика
@@ -354,3 +356,69 @@ docker compose up -d --build
 
 #### `GET /segment_efforts/{id}/streams`
 Стримы для отдельного отрезка сегмента. Скоуп `activity:read_all`. Параметры аналогичны стримам активности.
+
+---
+
+## Экспорт велотренировки (`TrainerRideDto`)
+
+### `GET /api/activities/export/ride/{stravaId}`
+
+Возвращает `TrainerRideDto` для одной велотренировки.
+
+### `POST /api/activities/export/rides`
+
+Пакетный экспорт. Тело запроса — JSON-массив `stravaId`. Активности, не найденные в БД, пропускаются.
+
+```bash
+curl -X POST http://localhost:8080/api/activities/export/rides \
+  -H "Content-Type: application/json" \
+  -d '[18348962468, 18358672395, 18599850315]'
+```
+
+---
+
+При первом вызове каждый эндпоинт автоматически загружает и кэширует все три источника данных (до трёх запросов к Strava API). Повторные вызовы отдают данные из БД. Поля без значения возвращаются как `null`.
+
+**Ограничения источников данных:**
+- `watts.max/min` — только для активностей с физическим датчиком мощности (виртуальные станки и тренажёры с ANT+/BLE); у уличных поездок без датчика будет `null`
+- `cadence.max/min` и `watts.min` — нулевые значения (остановка педалирования/каденса) отфильтрованы
+- `laps[].cadence.max` — Strava не предоставляет в лапах, поле отсутствует в контракте
+- Температура (`temp`) — Strava передаёт только при наличии датчика температуры на устройстве; в текущих активностях отсутствует
+
+### Маппинг полей
+
+| Поле контракта | Описание | Источник | Поле / формула |
+|---|---|---|---|
+| `stravaId` | ID активности в Strava | DB | `strava_id` |
+| `date` | Дата и время начала | DB | `start_date` |
+| `name` | Название тренировки | DB | `name` |
+| `type` | Тип активности | DB | `type` |
+| `sportType` | Подтип из Strava API v3 | DB | `sport_type` |
+| `distance` | Дистанция, метры | DB | `distance` |
+| `elapsedTimeSec` | Полное время, секунды | DB | `elapsed_time` |
+| `movingTimeSec` | Время в движении, секунды | DB | `moving_time` |
+| `heartrate.avg` | Средний пульс, уд/мин | `activity_raw` | `average_heartrate` |
+| `heartrate.max` | Максимальный пульс, уд/мин | `activity_raw` | `max_heartrate` |
+| `heartrate.min` | Минимальный пульс, уд/мин | `streams_raw` | `min(heartrate.data[])` |
+| `watts.avg` | Средняя мощность, Вт | DB | `average_watts` |
+| `watts.max` | Максимальная мощность, Вт | `activity_raw` | `max_watts` |
+| `watts.min` | Минимальная мощность, Вт | `streams_raw` | `min(watts.data[])`, ненулевые; null без датчика |
+| `cadence.avg` | Средний каденс, об/мин | DB | `average_cadence` |
+| `cadence.max` | Максимальный каденс, об/мин | `streams_raw` | `max(cadence.data[])`, ненулевые |
+| `cadence.min` | Минимальный каденс, об/мин | `streams_raw` | `min(cadence.data[])`, ненулевые |
+| `elevation` | Набор высоты, метры | DB | `total_elevation_gain` |
+| `avgSpeed` | Средняя скорость, км/ч | DB | `average_speed` × 3.6 |
+| `maxSpeed` | Максимальная скорость, км/ч | DB | `max_speed` × 3.6 |
+| `laps[].lapNum` | Номер круга | `laps_raw` | `lap_index` |
+| `laps[].distance` | Дистанция круга, метры | `laps_raw` | `distance` |
+| `laps[].movingTimeSec` | Время в движении, секунды | `laps_raw` | `moving_time` |
+| `laps[].elevationGain` | Набор высоты круга, метры | `laps_raw` | `total_elevation_gain` |
+| `laps[].heartrate.avg/max` | Пульс по кругу | `laps_raw` | `average_heartrate`, `max_heartrate` |
+| `laps[].heartrate.min` | Минимальный пульс круга | `streams_raw` | `min` по срезу `start_index..end_index` |
+| `laps[].watts.avg` | Средняя мощность круга | `laps_raw` | `average_watts` |
+| `laps[].watts.max/min` | Макс/мин мощность круга | `streams_raw` | по срезу `start_index..end_index`, ненулевые |
+| `laps[].cadence.avg` | Средний каденс круга | `laps_raw` | `average_cadence` |
+| `laps[].cadence.min` | Минимальный каденс круга | `streams_raw` | `min` по срезу `start_index..end_index`, ненулевые |
+| `description` | Описание тренировки | DB | `description` |
+| `commute` | Поездка на работу | DB | `commute` |
+| `trainer` | На тренажёре | DB | `trainer` |

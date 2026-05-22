@@ -6,12 +6,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import xyz.zlov.app.strava.activity.Activity;
 import xyz.zlov.app.strava.activity.ActivityRepository;
 import xyz.zlov.app.strava.activity.ActivityService;
+import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.stats.StatsService;
 import xyz.zlov.app.strava.stats.dto.*;
 import xyz.zlov.app.strava.strava.StravaClient;
@@ -67,6 +70,25 @@ public class DashboardController {
     @GetMapping("/stats/breakdown")
     public List<TypeBreakdownDto> breakdown() {
         return statsService.getActivityTypeBreakdown();
+    }
+
+    @GetMapping("/activities/export/ride/{stravaId}")
+    public ResponseEntity<TrainerRideDto> exportRide(@PathVariable Long stravaId) {
+        return activityService.fetchAndCacheDetails(stravaId)
+                .flatMap(a -> activityService.fetchAndCacheStreams(stravaId))
+                .map(a -> ResponseEntity.ok(activityService.buildTrainerRideDto(a)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/activities/export/rides")
+    public List<TrainerRideDto> exportRides(@RequestBody List<Long> stravaIds) {
+        return stravaIds.stream()
+                .map(id -> activityService.fetchAndCacheDetails(id)
+                        .flatMap(a -> activityService.fetchAndCacheStreams(id))
+                        .map(a -> activityService.buildTrainerRideDto(a))
+                        .orElse(null))
+                .filter(dto -> dto != null)
+                .toList();
     }
 
     @GetMapping("/activities/{stravaId}")
