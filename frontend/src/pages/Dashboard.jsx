@@ -55,14 +55,15 @@ const C_TEXT    = "#E8EAF0";
 const C_MUTED   = "#6B7280";
 
 // ── Components ─────────────────────────────────────────────────────────────────
-const KpiCard = ({ label, icon: Icon, value, sub, color }) => (
+const KpiCard = ({ label, icon: Icon, value, sub, sub2, color }) => (
   <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
       {Icon && <Icon size={11} color={C_MUTED} strokeWidth={2} />}
       <span style={{ fontSize: 11, color: C_MUTED, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
     </div>
     <span style={{ fontSize: 26, fontWeight: 700, color: color || C_TEXT, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{value}</span>
-    {sub && <span style={{ fontSize: 12, color: C_MUTED }}>{sub}</span>}
+    {sub  && <span style={{ fontSize: 12, color: C_MUTED }}>{sub}</span>}
+    {sub2 && <span style={{ fontSize: 12, color: C_MUTED }}>{sub2}</span>}
   </div>
 );
 
@@ -470,6 +471,10 @@ export default function Dashboard() {
   const totalSwimKm  = swimActs.reduce((s, a) => s + a.distance, 0) / 1000;
   const totalRunKm   = runActs.reduce((s, a) => s + a.distance, 0) / 1000;
   const totalWalkKm  = walkActs.reduce((s, a) => s + a.distance, 0) / 1000;
+  const bikeTimeSec  = bikeActs.reduce((s, a) => s + a.moving_time, 0);
+  const swimTimeSec  = swimActs.reduce((s, a) => s + a.moving_time, 0);
+  const runTimeSec   = runActs.reduce((s, a)  => s + a.moving_time, 0);
+  const walkTimeSec  = walkActs.reduce((s, a) => s + a.moving_time, 0);
   const totalTimeSec = filtered.reduce((s, a) => s + a.moving_time, 0);
 
   const activeMonths = useMemo(() =>
@@ -559,24 +564,23 @@ export default function Dashboard() {
           <div className="month-kpi-cal">
             <div className="month-kpi-area">
               <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
-                {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  color={C_BIKE} />}
-                {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   color={C_SWIM} />}
-                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  color="#F59E0B" />}
-                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} color="#9CA3AF" />}
+                {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
+                {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
+                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color="#F59E0B" />}
+                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color="#9CA3AF" />}
                 <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />
-                <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
               </div>
             </div>
             <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
           </div>
         ) : (
           <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
-            {(selectedMonth === null || totalBikeKm > 0) && <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  color={C_BIKE} />}
-            {(selectedMonth === null || totalSwimKm > 0) && <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   color={C_SWIM} />}
-            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  color="#F59E0B" />}
-            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} color="#9CA3AF" />}
+            {(selectedMonth === null || totalBikeKm > 0) && <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
+            {(selectedMonth === null || totalSwimKm > 0) && <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
+            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color="#F59E0B" />}
+            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color="#9CA3AF" />}
             {selectedMonth !== null && <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />}
-            <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
+            {selectedMonth === null && <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />}
           </div>
         )}
 
