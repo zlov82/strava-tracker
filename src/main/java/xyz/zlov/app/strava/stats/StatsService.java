@@ -54,6 +54,20 @@ public class StatsService {
                 .toList();
     }
 
+    public MonthlyStatsByTypeDto getMonthlyStatsByType(int year, int month) {
+        List<ActivityTypeStatsDto> stats = activityRepository.findMonthlyStatsByType(year, month)
+                .stream()
+                .map(r -> new ActivityTypeStatsDto(
+                        (String) r[0],
+                        toLong(r[1]),
+                        toDouble(r[2]),
+                        toLong(r[3]),
+                        r[4] != null ? toDouble(r[4]) : null
+                ))
+                .toList();
+        return new MonthlyStatsByTypeDto(year, month, stats);
+    }
+
     public List<TypeBreakdownDto> getActivityTypeBreakdown() {
         List<Object[]> rows = activityRepository.findTypeBreakdown();
         long total = rows.stream().mapToLong(r -> toLong(r[1])).sum();

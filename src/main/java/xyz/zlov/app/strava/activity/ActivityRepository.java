@@ -56,4 +56,22 @@ public interface ActivityRepository extends JpaRepository<Activity, Long> {
 
     @Query("SELECT a.type, COUNT(a) FROM Activity a GROUP BY a.type ORDER BY COUNT(a) DESC")
     List<Object[]> findTypeBreakdown();
+
+    @Query(value = """
+            SELECT type,
+                   COUNT(*)                AS count,
+                   COALESCE(SUM(distance), 0)             AS distance_meters,
+                   COALESCE(SUM(moving_time) / 60, 0)     AS moving_time_minutes,
+                   CASE WHEN type IN ('Ride', 'VirtualRide', 'EBikeRide', 'MountainBikeRide')
+                        THEN COALESCE(SUM(total_elevation_gain), 0)
+                        ELSE NULL END      AS total_elevation_gain
+            FROM activities
+            WHERE EXTRACT(YEAR FROM start_date AT TIME ZONE 'UTC') = :year
+              AND EXTRACT(MONTH FROM start_date AT TIME ZONE 'UTC') = :month
+              AND type IN ('Ride', 'VirtualRide', 'EBikeRide', 'MountainBikeRide',
+                           'Swim', 'Walk', 'Run', 'VirtualRun')
+            GROUP BY type
+            ORDER BY count DESC
+            """, nativeQuery = true)
+    List<Object[]> findMonthlyStatsByType(@Param("year") int year, @Param("month") int month);
 }

@@ -72,6 +72,11 @@ public class DashboardController {
         return statsService.getActivityTypeBreakdown();
     }
 
+    @GetMapping("/stats/{year}/{month}")
+    public MonthlyStatsByTypeDto monthlyByType(@PathVariable int year, @PathVariable int month) {
+        return statsService.getMonthlyStatsByType(year, month);
+    }
+
     @GetMapping("/activities/export/ride/{stravaId}")
     public ResponseEntity<TrainerRideDto> exportRide(@PathVariable Long stravaId) {
         return activityService.fetchAndCacheDetails(stravaId)
