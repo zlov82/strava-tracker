@@ -16,6 +16,7 @@ import xyz.zlov.app.strava.activity.ActivityRepository;
 import xyz.zlov.app.strava.activity.ActivityService;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.stats.StatsService;
+import org.springframework.web.client.RestClientResponseException;
 import xyz.zlov.app.strava.stats.dto.*;
 import xyz.zlov.app.strava.strava.StravaClient;
 import xyz.zlov.app.strava.strava.dto.StravaAthleteDto;
@@ -35,11 +36,15 @@ public class DashboardController {
 
     @GetMapping("/athlete")
     public Map<String, String> getAthlete() {
-        StravaAthleteDto a = stravaClient.getAthlete();
-        return Map.of(
-                "name", a.getFirstname() + " " + a.getLastname(),
-                "avatar", a.getProfile_medium() != null ? a.getProfile_medium() : ""
-        );
+        try {
+            StravaAthleteDto a = stravaClient.getAthlete();
+            return Map.of(
+                    "name", a.getFirstname() + " " + a.getLastname(),
+                    "avatar", a.getProfile_medium() != null ? a.getProfile_medium() : ""
+            );
+        } catch (RestClientResponseException e) {
+            return Map.of("name", "", "avatar", "");
+        }
     }
 
     @GetMapping("/stats/weekly")

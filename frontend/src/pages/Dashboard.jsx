@@ -424,7 +424,7 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    Promise.all([fetchAthlete(), fetchActivities(), fetchSync()])
+    Promise.all([fetchAthlete().catch(() => null), fetchActivities(), fetchSync()])
       .then(([ath, acts, syncData]) => {
         setAthlete(ath);
         setAllActivities(acts);
