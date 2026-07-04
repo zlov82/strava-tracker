@@ -2,6 +2,8 @@
 
 Персональный дашборд для визуализации активностей Strava.
 
+> **Важно про Strava API.** Strava ограничила доступ к API для приложений без платной подписки — на запросы вроде `GET /athlete` возвращается `403 Forbidden` с `{"resource":"Application","field":"Status","code":"Inactive"}`. Живые вызовы к Strava в этом случае перестают работать, но приложение остаётся полностью функциональным на уже накопленных данных, а детали новых тренировок можно **импортировать напрямую из оригинальных FIT-файлов** — без обращений к Strava API. См. раздел [Импорт из FIT](#импорт-из-fit).
+
 ## Возможности
 
 **Главная страница**
@@ -22,9 +24,16 @@
 
 - **Прямая ссылка на тренировку** — при открытии модала URL меняется на `?activity={stravaId}`. Кнопка 🔗 в шапке копирует ссылку в буфер. По прямой ссылке страница сразу открывает нужную тренировку.
 
+**Импорт из FIT** (не требует Strava API)
+- Отдельная страница `/import` — загрузка оригинального `.fit`/`.fit.gz` файла. Имя файла = идентификатор тренировки (так их называет bulk-export Strava), либо `stravaId` передаётся явно.
+- Все метрики, круги, временны́е ряды и трек маршрута разбираются из FIT и складываются в те же поля БД, что и данные из Strava API — остальное приложение работает без изменений.
+- Кнопка скачивания на карточке велозаезда — выгружает `TrainerRideDto` этого заезда (JSON-ответ `GET /api/activities/export/ride/{stravaId}`) в файл.
+
+Подробнее — в разделе [Импорт из FIT](#импорт-из-fit).
+
 ## Стек
 
-- **Backend**: Java 21, Spring Boot 4, PostgreSQL, Flyway
+- **Backend**: Java 21, Spring Boot 4, PostgreSQL, Flyway, Garmin FIT SDK
 - **Frontend**: React 19, Recharts, Tailwind CSS 4, Vite
 
 ## Требования
@@ -81,6 +90,8 @@ npm run dev
 | `STRAVA_CLIENT_ID` | Client ID приложения Strava |
 | `STRAVA_CLIENT_SECRET` | Client Secret приложения Strava |
 | `STRAVA_REDIRECT_URI` | URI редиректа после авторизации (по умолчанию `http://localhost/auth/callback`) |
+| `STRAVA_ATHLETE_ID` | ID атлета для импорта из FIT, если в БД ещё нет ни токена, ни активностей (по умолчанию `133817559`). Обычно берётся из БД автоматически. |
+| `APP_CORS_ALLOWED_ORIGINS` | Разрешённые CORS-origin для `/api/**`, через запятую (по умолчанию `http://localhost:5173`). На проде указать домен фронтенда, напр. `https://strava.app.zlov.xyz` — иначе браузерные POST-запросы (импорт FIT) отвергаются с `403`. |
 | `SHOW_ACTIVITY_MAP` | Показывать карту маршрута в деталях активности (по умолчанию `true`). Встраивается в сборку фронтенда, требует пересборки образа. |
 
 ## Схема БД
@@ -121,10 +132,10 @@ erDiagram
         boolean trainer "Тренажёр (не на улице)"
         boolean commute "Помечена как поездка на работу"
         text description "Описание тренировки"
-        text map_polyline "Упрощённый трек маршрута (из SummaryActivity)"
-        jsonb activity_raw "Полный ответ GET /activities/{id} — кэш при первом открытии"
-        jsonb laps_raw "Ответ GET /activities/{id}/laps — круги"
-        jsonb streams_raw "Ответ GET /activities/{id}/streams — пульс, скорость, высота и др."
+        text map_polyline "Трек маршрута (из SummaryActivity или закодирован из GPS FIT)"
+        jsonb activity_raw "Детали активности — из GET /activities/{id} или из FIT-импорта"
+        jsonb laps_raw "Круги — из GET /activities/{id}/laps или из FIT-импорта"
+        jsonb streams_raw "Временны́е ряды — из GET /activities/{id}/streams или из FIT-импорта"
         timestamptz created_at "Дата создания записи"
         timestamptz updated_at "Дата последнего обновления"
     }
@@ -160,7 +171,8 @@ erDiagram
 | `GET` | `/api/activities/{stravaId}/streams` | — | Временны́е ряды активности; при первом запросе лениво загружает и кэширует стримы (`streams_raw`) |
 | `GET` | `/api/activities/export/ride/{stravaId}` | — | Экспорт одной велотренировки в формате `TrainerRideDto` |
 | `POST` | `/api/activities/export/rides` | body: `[id, ...]` | Пакетный экспорт велотренировок; тело — JSON-массив `stravaId` |
-| `GET` | `/api/athlete` | — | Имя и аватар атлета (из Strava) |
+| `POST` | `/api/import/fit` | multipart: `file`, опц. `stravaId`, `name`, `description` | Импорт тренировки из FIT-файла (см. [Импорт из FIT](#импорт-из-fit)) |
+| `GET` | `/api/athlete` | — | Имя и аватар атлета (из Strava; при неактивном приложении возвращает пустые значения) |
 
 ### Статистика
 
@@ -215,6 +227,40 @@ curl -X POST http://localhost:8080/api/sync/full
 
 **Полный пересинк** (`POST /api/sync/full`) обновляет только поля из `SummaryActivity` (метрики, дистанция, время и т.д.) — `activity_raw`, `laps_raw` и `streams_raw` остаются нетронутыми.
 
+## Импорт из FIT
+
+Когда Strava API недоступен (приложение без платной подписки), детали тренировок можно загрузить напрямую из оригинальных FIT-файлов. Парсер (Garmin FIT SDK) раскладывает файл в **тот же формат**, что раньше приходил из Strava API (`streams_raw` в формате `key_by_type`, `laps_raw`, `activity_raw`, закодированный `map_polyline`), поэтому весь остальной код — дашборд, детали, экспорт `TrainerRideDto` — работает без изменений.
+
+### Где взять файлы
+
+- **Bulk-export**: `Settings → My Account → Download or Delete Your Account` — архив, где файлы в папке `activities/` уже названы `{activityId}.fit.gz`. Имя файла = `strava_id`, ровно как ожидает импорт.
+- **Экспорт одной тренировки**: на странице активности `⋯ → Export Original`.
+
+### Загрузка
+
+Страница **`/import`**: выбрать `.fit`/`.fit.gz`, при желании задать название и описание. `stravaId` по умолчанию берётся из имени файла (можно передать явно — тогда файл привяжется к конкретному заезду независимо от имени). Повторная загрузка того же `stravaId` обновляет запись (upsert).
+
+### Что разбирается
+
+| Данные | Источник в FIT |
+|---|---|
+| Дистанция, время, набор высоты, ср./макс. скорость, пульс, каденс, мощность | `session` |
+| Тип и подтип (`Ride`/`Run`/`Swim`/`Walk`, `trainer`) | `sport` / `sub_sport` |
+| Круги (`laps_raw`, вкл. `start_index`/`end_index`) | `lap` |
+| Временны́е ряды: время, дистанция, высота, скорость, пульс, каденс, мощность | `record` |
+| Трек маршрута (`map_polyline`) | GPS `record` (семиокружности → Google polyline) |
+
+### Чего в FIT нет (метаданные Strava)
+
+- **`name`** — задаётся при загрузке; если не указано, генерируется по шаблону «`{Тип} {день} {месяц}`» (напр. «Заезд 3 июля»).
+- **`description`** — задаётся при загрузке, необязательное.
+- **`commute`** — всегда `false`.
+- **`moving_time`** берётся из `total_timer_time` — близко к алгоритму Strava, но может отличаться на секунды (влияет на среднюю скорость на уличных заездах).
+
+### Кнопка на карточке заезда
+
+На карточке велозаезда (`type = Ride`) в списке месяца есть иконка скачивания — она выгружает `TrainerRideDto` этого заезда (`GET /api/activities/export/ride/{stravaId}`) в файл `ride-{stravaId}.json`. Для заездов без закэшированных деталей (не импортированных) ручка попробует обратиться к Strava и вернёт ошибку.
+
 ## Оптимизация загрузки
 
 Эндпоинт списка активностей (`GET /api/activities`) не возвращает тяжёлые JSONB-поля (`activity_raw`, `laps_raw`, `streams_raw`) — они исключены из list-ответа и приходят только через detail-эндпоинты при открытии конкретной тренировки. `map_polyline` остаётся в списке — он лёгкий (~500 байт) и нужен для карты сразу.
@@ -237,6 +283,7 @@ curl -X POST http://localhost:8080/api/sync/full
 STRAVA_CLIENT_ID=ваш_client_id
 STRAVA_CLIENT_SECRET=ваш_client_secret
 STRAVA_REDIRECT_URI=https://yourdomain.com/auth/callback
+# STRAVA_ATHLETE_ID=...   # опционально, только если БД стартует пустой
 ```
 
 ### 3. docker-compose

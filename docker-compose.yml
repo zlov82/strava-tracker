@@ -19,6 +19,8 @@ services:
       STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID}
       STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
       STRAVA_REDIRECT_URI: ${STRAVA_REDIRECT_URI:-http://localhost/auth/callback}
+      STRAVA_ATHLETE_ID: ${STRAVA_ATHLETE_ID:-133817559}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-https://strava.app.zlov.xyz}
     volumes:
       - ./logs:/app/logs
     depends_on:

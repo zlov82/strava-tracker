@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Bike, Waves, SportShoe, Footprints, Timer, Hash } from "lucide-react";
+import { Bike, Waves, SportShoe, Footprints, Timer, Hash, Download } from "lucide-react";
 import axios from "axios";
 import ActivityMap from "../components/ActivityMap";
 import ActivityLaps from "../components/ActivityLaps";
@@ -218,8 +218,26 @@ const TypeBadge = ({ type }) => {
   );
 };
 
+const downloadRide = async (e, stravaId) => {
+  e.stopPropagation();
+  e.preventDefault();
+  try {
+    const { data } = await api.get(`/api/activities/export/ride/${stravaId}`, { responseType: "blob" });
+    const url = URL.createObjectURL(data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ride-${stravaId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Не удалось получить данные заезда: " + (err.response?.status ?? err.message));
+  }
+};
+
 const ActivityRow = ({ act, onClick }) => (
-  <div className="act-row" onClick={onClick} style={{ display: "grid", gridTemplateColumns: "auto 1fr 100px 80px 110px", gap: "0 16px", alignItems: "center", padding: "12px 16px", background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s" }}
+  <div className="act-row" onClick={onClick} style={{ display: "grid", gridTemplateColumns: "auto 1fr 100px 80px 110px 28px", gap: "0 16px", alignItems: "center", padding: "12px 16px", background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s" }}
     onMouseEnter={e => e.currentTarget.style.borderColor = C_BIKE}
     onMouseLeave={e => e.currentTarget.style.borderColor = C_BORDER}
   >
@@ -239,6 +257,20 @@ const ActivityRow = ({ act, onClick }) => (
     <div className="act-speed" style={{ textAlign: "right" }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: act.type === "Ride" ? C_BIKE : C_SWIM }}>{fmtSpeed(act.average_speed, act.type)}</div>
       <div style={{ fontSize: 11, color: C_MUTED }}>скорость</div>
+    </div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {act.type === "Ride" && (
+        <button
+          type="button"
+          title="Скачать данные заезда (JSON)"
+          onClick={e => downloadRide(e, act.stravaId)}
+          style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: C_MUTED, padding: 4, borderRadius: 6, transition: "color 0.15s" }}
+          onMouseEnter={e => e.currentTarget.style.color = C_BIKE}
+          onMouseLeave={e => e.currentTarget.style.color = C_MUTED}
+        >
+          <Download size={15} />
+        </button>
+      )}
     </div>
   </div>
 );
@@ -513,7 +545,7 @@ export default function Dashboard() {
         .month-kpi-cal { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; margin: 24px 0; }
         .month-kpi-area { flex: 1; min-width: 0; }
         @media (max-width: 640px) {
-          .act-row { grid-template-columns: auto 1fr auto !important; }
+          .act-row { grid-template-columns: auto 1fr auto 28px !important; }
           .act-time, .act-speed { display: none !important; }
           .month-kpi-cal { flex-direction: column !important; align-items: stretch !important; }
           .cal-grid { grid-template-columns: repeat(7, 1fr) !important; }
