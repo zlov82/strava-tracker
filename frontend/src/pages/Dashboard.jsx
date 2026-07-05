@@ -258,7 +258,7 @@ const ActivityRow = ({ act, onClick }) => (
       <div style={{ fontSize: 13, fontWeight: 600, color: act.type === "Ride" ? C_BIKE : C_SWIM }}>{fmtSpeed(act.average_speed, act.type)}</div>
       <div style={{ fontSize: 11, color: C_MUTED }}>скорость</div>
     </div>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div className="act-dl" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
       {act.type === "Ride" && (
         <button
           type="button"
@@ -545,8 +545,8 @@ export default function Dashboard() {
         .month-kpi-cal { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; margin: 24px 0; }
         .month-kpi-area { flex: 1; min-width: 0; }
         @media (max-width: 640px) {
-          .act-row { grid-template-columns: auto 1fr auto 28px !important; }
-          .act-time, .act-speed { display: none !important; }
+          .act-row { grid-template-columns: auto 1fr auto !important; }
+          .act-time, .act-speed, .act-dl { display: none !important; }
           .month-kpi-cal { flex-direction: column !important; align-items: stretch !important; }
           .cal-grid { grid-template-columns: repeat(7, 1fr) !important; }
           .cal-circle { width: 32px !important; height: 32px !important; }
