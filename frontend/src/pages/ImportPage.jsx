@@ -1,16 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { Upload, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
-
-// ── Colors (shared with Dashboard) ───────────────────────────────────────────
-const C_BIKE    = "#16A97A";
-const C_BG      = "#0F1117";
-const C_SURFACE = "#181C27";
-const C_SURF2   = "#1E2333";
-const C_BORDER  = "#2A2F42";
-const C_TEXT    = "#E8EAF0";
-const C_MUTED   = "#6B7280";
-const C_RED     = "#EF4444";
+import { C_BIKE, C_BG, C_SURFACE, C_SURF2, C_BORDER, C_TEXT, C_MUTED, C_RED, CARD_SHADOW } from "../theme";
 
 const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -78,7 +69,7 @@ export default function ImportPage() {
           <label style={{
             border: `1.5px dashed ${file ? C_BIKE : C_BORDER}`, borderRadius: 12, padding: "24px 20px",
             display: "flex", flexDirection: "column", alignItems: "center", gap: 8, cursor: "pointer",
-            background: C_SURFACE, transition: "border-color 0.15s",
+            background: C_SURFACE, boxShadow: CARD_SHADOW, transition: "border-color 0.15s",
           }}>
             <Upload size={22} color={file ? C_BIKE : C_MUTED} />
             <span style={{ fontSize: 13, color: file ? C_TEXT : C_MUTED }}>
@@ -104,7 +95,7 @@ export default function ImportPage() {
           <button type="submit" disabled={!file || status === "loading"}
             style={{
               background: !file || status === "loading" ? C_SURF2 : C_BIKE,
-              color: !file || status === "loading" ? C_MUTED : "#052E22",
+              color: !file || status === "loading" ? C_MUTED : "#FFFFFF",
               border: "none", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 700,
               cursor: !file || status === "loading" ? "default" : "pointer", transition: "background 0.15s",
             }}>

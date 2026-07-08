@@ -3,17 +3,15 @@ import {
   Line, Area, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
 
-const C_BORDER = '#2A2F42';
-const C_MUTED  = '#6B7280';
-const C_SURF2  = '#1E2333';
-const C_TEXT   = '#E8EAF0';
+import { C_BORDER, C_MUTED, C_SURF2, C_TEXT } from '../theme';
 
+// Палитра линий (категориальная) — проверена валидатором для светлого фона.
 const CHART_COLORS = {
-  heartrate:        '#EF4444',
-  velocity_smooth:  '#6366F1',
-  altitude:         '#16A97A',
-  cadence:          '#F97316',
-  watts:            '#A78BFA',
+  heartrate:        '#DC2626',
+  velocity_smooth:  '#4F46E5',
+  altitude:         '#0E9F6E',
+  cadence:          '#EA580C',
+  watts:            '#7C3AED',
 };
 
 const MAX_POINTS = 300;

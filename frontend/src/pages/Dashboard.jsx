@@ -8,6 +8,10 @@ import axios from "axios";
 import ActivityMap from "../components/ActivityMap";
 import ActivityLaps from "../components/ActivityLaps";
 import ActivityCharts from "../components/ActivityCharts";
+import {
+  C_BG, C_SURFACE, C_SURF2, C_BORDER, C_TEXT, C_MUTED,
+  C_BIKE, C_SWIM, C_RUN, C_WALK, CARD_SHADOW, CARD_SHADOW_HOVER, OVERLAY_BG,
+} from "../theme";
 
 // ── API ────────────────────────────────────────────────────────────────────────
 const api = axios.create();
@@ -44,19 +48,9 @@ const fmtSpeed = (ms, t) => {
 };
 const fmtDate = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
 
-// ── Colors ─────────────────────────────────────────────────────────────────────
-const C_BIKE    = "#16A97A";
-const C_SWIM    = "#3B82F6";
-const C_BG      = "#0F1117";
-const C_SURFACE = "#181C27";
-const C_SURF2   = "#1E2333";
-const C_BORDER  = "#2A2F42";
-const C_TEXT    = "#E8EAF0";
-const C_MUTED   = "#6B7280";
-
 // ── Components ─────────────────────────────────────────────────────────────────
 const KpiCard = ({ label, icon: Icon, value, sub, sub2, color }) => (
-  <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
+  <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4, boxShadow: CARD_SHADOW }}>
     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
       {Icon && <Icon size={11} color={C_MUTED} strokeWidth={2} />}
       <span style={{ fontSize: 11, color: C_MUTED, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
@@ -68,9 +62,9 @@ const KpiCard = ({ label, icon: Icon, value, sub, sub2, color }) => (
 );
 
 const RecordCard = ({ label, value, name, date, color, onClick }) => (
-  <div onClick={onClick} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 3, cursor: onClick ? "pointer" : "default", transition: "border-color 0.15s" }}
-    onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = color)}
-    onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = C_BORDER)}
+  <div onClick={onClick} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 3, cursor: onClick ? "pointer" : "default", boxShadow: CARD_SHADOW, transition: "border-color 0.15s, box-shadow 0.15s, transform 0.15s" }}
+    onMouseEnter={e => { if (onClick) { e.currentTarget.style.borderColor = color; e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+    onMouseLeave={e => { if (onClick) { e.currentTarget.style.borderColor = C_BORDER; e.currentTarget.style.boxShadow = CARD_SHADOW; e.currentTarget.style.transform = "none"; } }}
   >
     <span style={{ fontSize: 10, color: C_MUTED, letterSpacing: "0.07em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
     <span style={{ fontSize: 22, fontWeight: 700, color: color || C_TEXT, fontVariantNumeric: "tabular-nums", lineHeight: 1.15 }}>{value}</span>
@@ -91,7 +85,7 @@ const MiniMonthChart = ({ data, dataKey, color, onMonthClick }) => (
       <Tooltip content={({ active, payload, label }) => active && payload?.length && payload[0].value > 0
         ? <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 8, padding: "5px 10px", fontSize: 12, color: C_TEXT }}>{label}: <strong>{payload[0].value} км</strong></div>
         : null}
-        cursor={{ fill: "rgba(255,255,255,0.03)" }}
+        cursor={{ fill: "rgba(16,24,40,0.05)" }}
       />
       <Bar dataKey={dataKey} fill={color} radius={[3, 3, 0, 0]} />
     </BarChart>
@@ -102,12 +96,12 @@ const bestOf = (acts, key) => acts.length ? acts.reduce((b, a) => (a[key] ?? 0) 
 const fmtActDate = (iso) => new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "long" });
 
 const TYPE_META = {
-  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО",      dot: "#16A97A", icon: Bike,       color: "#16A97A" },
-  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ",  dot: "#3B82F6", icon: Waves,      color: "#3B82F6" },
-  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ",       dot: "#F59E0B", icon: SportShoe,  color: "#F59E0B" },
-  Walk:  { bg: "#F3F4F6", fg: "#374151", label: "🚶 ХОДЬБА",    dot: "#9CA3AF", icon: Footprints, color: "#9CA3AF" },
+  Ride:  { bg: "#D1FAE5", fg: "#065F46", label: "🚴 ВЕЛО",      dot: C_BIKE, icon: Bike,       color: C_BIKE },
+  Swim:  { bg: "#DBEAFE", fg: "#1E40AF", label: "🏊 ПЛАВАНИЕ",  dot: C_SWIM, icon: Waves,      color: C_SWIM },
+  Run:   { bg: "#FEF3C7", fg: "#92400E", label: "🏃 БЕГ",       dot: C_RUN,  icon: SportShoe,  color: C_RUN },
+  Walk:  { bg: "#EEF1F5", fg: "#334155", label: "🚶 ХОДЬБА",    dot: C_WALK, icon: Footprints, color: C_WALK },
 };
-const DEFAULT_TYPE = { bg: "#F3F4F6", fg: "#374151", label: "🏅 ДРУГОЕ", dot: "#6B7280", icon: null, color: "#6B7280" };
+const DEFAULT_TYPE = { bg: "#EEF1F5", fg: "#334155", label: "🏅 ДРУГОЕ", dot: C_WALK, icon: null, color: C_WALK };
 
 const DOW_LABELS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 
@@ -133,7 +127,7 @@ const MonthCalendar = ({ activities, year, month }) => {
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
   return (
-    <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", flexShrink: 0 }}>
+    <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", flexShrink: 0, boxShadow: CARD_SHADOW }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 12 }}>
         Календарь активностей
       </div>
@@ -143,8 +137,8 @@ const MonthCalendar = ({ activities, year, month }) => {
           const Icon = meta.icon;
           return (
             <div key={type} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <div style={{ width: 18, height: 18, borderRadius: "50%", background: C_TEXT, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {Icon && <Icon size={10} color={C_BG} strokeWidth={2} />}
+              <div style={{ width: 18, height: 18, borderRadius: "50%", background: meta.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {Icon && <Icon size={10} color="#fff" strokeWidth={2} />}
               </div>
               <span style={{ fontSize: 10, color: C_MUTED }}>{meta.label.replace(/[^ ]+ /, "")}</span>
             </div>
@@ -169,8 +163,8 @@ const MonthCalendar = ({ activities, year, month }) => {
           const primaryMeta = hasActivity ? (TYPE_META[types[0]] || DEFAULT_TYPE) : null;
           const PrimaryIcon = primaryMeta?.icon ?? null;
           const extra = types.length - 1;
-          const circleColor = isToday && hasActivity ? C_BIKE : hasActivity ? C_TEXT : "transparent";
-          const borderColor = isToday ? C_BIKE : hasActivity ? C_TEXT : C_BORDER;
+          const circleColor = hasActivity ? primaryMeta.color : "transparent";
+          const borderColor = isToday ? C_BIKE : hasActivity ? primaryMeta.color : C_BORDER;
           return (
             <div key={day} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div className="cal-circle" style={{
@@ -182,14 +176,14 @@ const MonthCalendar = ({ activities, year, month }) => {
               }}>
                 {hasActivity ? (
                   <>
-                    {PrimaryIcon && <PrimaryIcon size={20} color={C_BG} strokeWidth={1.75} />}
+                    {PrimaryIcon && <PrimaryIcon size={20} color="#fff" strokeWidth={1.75} />}
                     {extra > 0 && (
                       <div style={{
                         position: "absolute", top: -3, right: -3,
                         width: 14, height: 14, borderRadius: "50%",
-                        background: C_BIKE, border: `1.5px solid ${C_BG}`,
+                        background: C_TEXT, border: "1.5px solid #fff",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 7, fontWeight: 700, color: C_BG,
+                        fontSize: 7, fontWeight: 700, color: "#fff",
                       }}>+{extra}</div>
                     )}
                   </>
@@ -237,9 +231,9 @@ const downloadRide = async (e, stravaId) => {
 };
 
 const ActivityRow = ({ act, onClick }) => (
-  <div className="act-row" onClick={onClick} style={{ display: "grid", gridTemplateColumns: "auto 1fr 100px 80px 110px 28px", gap: "0 16px", alignItems: "center", padding: "12px 16px", background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 10, cursor: "pointer", transition: "border-color 0.15s" }}
-    onMouseEnter={e => e.currentTarget.style.borderColor = C_BIKE}
-    onMouseLeave={e => e.currentTarget.style.borderColor = C_BORDER}
+  <div className="act-row" onClick={onClick} style={{ display: "grid", gridTemplateColumns: "auto 1fr 100px 80px 110px 28px", gap: "0 16px", alignItems: "center", padding: "12px 16px", background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 12, cursor: "pointer", boxShadow: CARD_SHADOW, transition: "border-color 0.15s, box-shadow 0.15s" }}
+    onMouseEnter={e => { e.currentTarget.style.borderColor = C_BIKE; e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER; }}
+    onMouseLeave={e => { e.currentTarget.style.borderColor = C_BORDER; e.currentTarget.style.boxShadow = CARD_SHADOW; }}
   >
     <TypeBadge type={act.type} />
     <div>
@@ -344,8 +338,8 @@ const ActivityModal = ({ act, onClose }) => {
   const visibleTabs = TABS.filter(t => t !== "Маршрут" || hasMap);
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 16, padding: 28, width: "min(560px, 92vw)", maxHeight: "85vh", overflowY: "auto" }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: OVERLAY_BG, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 16, padding: 28, width: "min(560px, 92vw)", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 24px 48px rgba(16,24,40,0.18), 0 8px 16px rgba(16,24,40,0.10)" }}>
 
         {/* Шапка */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
@@ -391,9 +385,9 @@ const ActivityModal = ({ act, onClose }) => {
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <DetailStat label="Расстояние"      value={fmtDist(act.distance, act.type)} color={act.type === "Ride" ? C_BIKE : C_SWIM} />
+              <DetailStat label="Набор высоты"     value={act.elevationM ? `${act.elevationM} м` : null} />
               <DetailStat label="Время в движении" value={fmtTime(act.moving_time)} />
               <DetailStat label="Общее время"      value={act.elapsed_time ? fmtTime(act.elapsed_time) : null} />
-              <DetailStat label="Набор высоты"     value={act.elevationM ? `${act.elevationM} м` : null} />
               <DetailStat label="Ср. скорость"     value={act.average_speed ? fmtSpeed(act.average_speed, act.type) : null} />
               <DetailStat label="Макс. скорость"   value={act.max_speed ? fmtSpeed(act.max_speed, act.type) : null} />
               <DetailStat label="Ср. пульс"        value={act.averageHeartrate ? `${Math.round(act.averageHeartrate)} уд/мин` : null} />
@@ -565,7 +559,7 @@ export default function Dashboard() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {athlete?.avatar
               ? <img src={athlete.avatar} alt="" style={{ width: 36, height: 36, borderRadius: 10, objectFit: "cover" }} />
-              : <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #16A97A, #3B82F6)" }} />
+              : <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C_BIKE}, ${C_SWIM})` }} />
             }
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>{athlete?.name ?? "Strava Dashboard"}</div>
@@ -598,8 +592,8 @@ export default function Dashboard() {
               <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
                 {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
                 {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
-                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color="#F59E0B" />}
-                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color="#9CA3AF" />}
+                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />}
+                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />}
                 <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />
               </div>
             </div>
@@ -609,8 +603,8 @@ export default function Dashboard() {
           <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
             {(selectedMonth === null || totalBikeKm > 0) && <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
             {(selectedMonth === null || totalSwimKm > 0) && <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
-            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color="#F59E0B" />}
-            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color="#9CA3AF" />}
+            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />}
+            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />}
             {selectedMonth !== null && <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />}
             {selectedMonth === null && <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />}
           </div>
@@ -642,7 +636,7 @@ export default function Dashboard() {
               ].filter(Boolean),
             },
             runActs.length > 0 && {
-              label: "Бег", icon: SportShoe, color: "#F59E0B", dataKey: "runKm",
+              label: "Бег", icon: SportShoe, color: C_RUN, dataKey: "runKm",
               records: [
                 longestRun   && { label: "Самый длинный забег",            value: `${(longestRun.distance/1000).toFixed(1)} км`,          act: longestRun },
               ].filter(Boolean),
@@ -657,7 +651,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 {groups.map(({ label, icon: Icon, color, dataKey, records }) => (
-                  <div key={label} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px" }}>
+                  <div key={label} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "16px 20px", boxShadow: CARD_SHADOW }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
                       {Icon && <Icon size={12} color={color} strokeWidth={2} />}
                       <span style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{label}</span>
@@ -678,7 +672,7 @@ export default function Dashboard() {
 
 
         {/* Activity list — только на вкладке конкретного месяца */}
-        {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px" }}>
+        {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px", boxShadow: CARD_SHADOW }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase" }}>
               {`Активности — ${MONTHS_FULL[selectedMonth]}`}

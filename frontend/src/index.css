@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Холст светлой темы — чтобы при overscroll не проступал белый фон. */
+html,
+body {
+  background: #f6f7f9;
+}

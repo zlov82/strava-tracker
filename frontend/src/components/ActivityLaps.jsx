@@ -1,7 +1,4 @@
-const C_BORDER = '#2A2F42';
-const C_MUTED  = '#6B7280';
-const C_SURF2  = '#1E2333';
-const C_TEXT   = '#E8EAF0';
+import { C_BORDER, C_MUTED, C_SURF2, C_TEXT } from '../theme';
 
 const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;

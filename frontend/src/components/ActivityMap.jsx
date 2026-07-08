@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import polylineDecoder from '@mapbox/polyline';
 import 'leaflet/dist/leaflet.css';
+import { C_BORDER, C_MUTED, C_SURFACE } from '../theme';
 
+// Цвета трека подобраны под читаемость поверх тайлов карты, а не под палитру UI.
 const TYPE_COLOR = { Ride: '#6366F1', Run: '#F97316', Swim: '#EC4899', Walk: '#A78BFA' };
-const C_BORDER  = '#2A2F42';
-const C_MUTED   = '#6B7280';
-const C_SURFACE = '#181C27';
 
 function MapInstance({ polyline, type, style, onClick }) {
   const containerRef   = useRef(null);
@@ -77,7 +76,7 @@ export default function ActivityMap({ act, standalone = false }) {
         <MapInstance polyline={polyline} type={act.type} style={{ width: '100%', height: '100%' }} />
         <button
           onClick={() => setFullscreen(false)}
-          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, background: 'rgba(15,17,23,0.85)', border: `1px solid ${C_BORDER}`, borderRadius: 8, color: C_MUTED, fontSize: 18, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'absolute', top: 12, right: 12, zIndex: 1000, background: 'rgba(15,17,23,0.85)', border: `1px solid ${C_BORDER}`, borderRadius: 8, color: '#D0D5DD', fontSize: 18, width: 36, height: 36, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           ✕
         </button>
@@ -92,7 +91,7 @@ export default function ActivityMap({ act, standalone = false }) {
           {!fullscreen
             ? <>
                 <MapInstance polyline={polyline} type={act.type} style={{ height: 320, cursor: 'zoom-in' }} onClick={() => setFullscreen(true)} />
-                <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: C_MUTED, pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: '#D0D5DD', pointerEvents: 'none' }}>
                   нажми для полного экрана
                 </div>
               </>
@@ -133,7 +132,7 @@ export default function ActivityMap({ act, standalone = false }) {
           {expanded && !fullscreen && (
             <>
               <MapInstance polyline={polyline} type={act.type} style={{ height: 260, cursor: 'zoom-in' }} onClick={() => setFullscreen(true)} />
-              <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: C_MUTED, pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', bottom: 8, right: 8, background: 'rgba(15,17,23,0.75)', borderRadius: 6, padding: '3px 8px', fontSize: 11, color: '#D0D5DD', pointerEvents: 'none' }}>
                 нажми для полного экрана
               </div>
             </>
