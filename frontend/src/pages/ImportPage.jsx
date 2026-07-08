@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { Upload, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
-import { C_BIKE, C_BG, C_SURFACE, C_SURF2, C_BORDER, C_TEXT, C_MUTED, C_RED, CARD_SHADOW } from "../theme";
+import { C_BIKE, C_SURFACE, C_SURF2, C_BORDER, C_TEXT, C_MUTED, C_RED, CARD_SHADOW, CANVAS_BG } from "../theme";
 
 const fmtTime = (s) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -9,9 +9,9 @@ const fmtTime = (s) => {
 };
 
 const Field = ({ label, value }) => (
-  <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 10, padding: "10px 14px" }}>
-    <div style={{ fontSize: 10, color: C_MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{label}</div>
-    <div style={{ fontSize: 16, fontWeight: 700, color: C_TEXT }}>{value ?? "—"}</div>
+  <div style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%)", border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "10px 14px", boxShadow: "0 1px 2px rgba(16,24,40,0.05), 0 6px 16px -10px rgba(16,24,40,0.14)" }}>
+    <div style={{ fontSize: 10, color: C_MUTED, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{label}</div>
+    <div style={{ fontSize: 16, fontWeight: 700, color: C_TEXT, fontVariantNumeric: "tabular-nums" }}>{value ?? "—"}</div>
   </div>
 );
 
@@ -46,7 +46,7 @@ export default function ImportPage() {
   };
 
   return (
-    <div style={{ background: C_BG, minHeight: "100vh", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", color: C_TEXT }}>
+    <div style={{ background: CANVAS_BG, backgroundAttachment: "fixed", minHeight: "100vh", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", color: C_TEXT }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');`}</style>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "32px 24px" }}>

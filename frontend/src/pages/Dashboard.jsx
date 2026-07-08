@@ -11,6 +11,7 @@ import ActivityCharts from "../components/ActivityCharts";
 import {
   C_BG, C_SURFACE, C_SURF2, C_BORDER, C_TEXT, C_MUTED,
   C_BIKE, C_SWIM, C_RUN, C_WALK, CARD_SHADOW, CARD_SHADOW_HOVER, OVERLAY_BG,
+  CANVAS_BG, HEADER_BG, HEADER_BLUR,
 } from "../theme";
 
 // ── API ────────────────────────────────────────────────────────────────────────
@@ -270,9 +271,9 @@ const ActivityRow = ({ act, onClick }) => (
 );
 
 const DetailStat = ({ label, value, color }) => (
-  <div style={{ background: C_SURF2, border: `1px solid ${C_BORDER}`, borderRadius: 10, padding: "12px 16px" }}>
-    <div style={{ fontSize: 11, color: C_MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-    <div style={{ fontSize: 20, fontWeight: 700, color: color || C_TEXT }}>{value ?? "—"}</div>
+  <div style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%)", border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "12px 16px", boxShadow: "0 1px 2px rgba(16,24,40,0.05), 0 6px 16px -10px rgba(16,24,40,0.14)" }}>
+    <div style={{ fontSize: 10.5, color: C_MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>{label}</div>
+    <div style={{ fontSize: 20, fontWeight: 700, color: color || C_TEXT, fontVariantNumeric: "tabular-nums" }}>{value ?? "—"}</div>
   </div>
 );
 
@@ -336,10 +337,11 @@ const ActivityModal = ({ act, onClose }) => {
 
   const hasMap      = !!(act.mapPolyline || act.activityRaw);
   const visibleTabs = TABS.filter(t => t !== "Маршрут" || hasMap);
+  const accent      = (TYPE_META[act.type] || DEFAULT_TYPE).color;
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: OVERLAY_BG, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 16, padding: 28, width: "min(560px, 92vw)", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 24px 48px rgba(16,24,40,0.18), 0 8px 16px rgba(16,24,40,0.10)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: `radial-gradient(680px 220px at 50% -60px, ${accent}1F, transparent 70%), ${C_SURFACE}`, border: `1px solid ${C_BORDER}`, borderRadius: 16, padding: 28, width: "min(560px, 92vw)", maxHeight: "85vh", overflowY: "auto", boxShadow: `0 24px 48px rgba(16,24,40,0.18), 0 8px 16px rgba(16,24,40,0.10), inset 0 1px 0 rgba(255,255,255,0.6)` }}>
 
         {/* Шапка */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
@@ -365,7 +367,7 @@ const ActivityModal = ({ act, onClose }) => {
           {visibleTabs.map(t => (
             <button key={t} onClick={t === "Графики" ? onChartsTab : () => setTab(t)} style={{
               padding: "8px 16px", background: "none", border: "none",
-              borderBottom: tab === t ? `2px solid ${C_BIKE}` : "2px solid transparent",
+              borderBottom: tab === t ? `2px solid ${accent}` : "2px solid transparent",
               color: tab === t ? C_TEXT : C_MUTED,
               cursor: "pointer", fontSize: 13, fontWeight: tab === t ? 600 : 400,
               marginBottom: -1, transition: "color 0.15s",
@@ -384,7 +386,7 @@ const ActivityModal = ({ act, onClose }) => {
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <DetailStat label="Расстояние"      value={fmtDist(act.distance, act.type)} color={act.type === "Ride" ? C_BIKE : C_SWIM} />
+              <DetailStat label="Расстояние"      value={fmtDist(act.distance, act.type)} />
               <DetailStat label="Набор высоты"     value={act.elevationM ? `${act.elevationM} м` : null} />
               <DetailStat label="Время в движении" value={fmtTime(act.moving_time)} />
               <DetailStat label="Общее время"      value={act.elapsed_time ? fmtTime(act.elapsed_time) : null} />
@@ -531,17 +533,22 @@ export default function Dashboard() {
   );
 
   return (
-    <div style={{ background: C_BG, minHeight: "100vh", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", color: C_TEXT, paddingBottom: 48 }}>
+    <div style={{ background: CANVAS_BG, backgroundAttachment: "fixed", minHeight: "100vh", fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif", color: C_TEXT, paddingBottom: 48 }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
         .month-nav { overflow-x: auto; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
         .month-nav::-webkit-scrollbar { display: none; }
-        .month-kpi-cal { display: flex; flex-direction: row; align-items: flex-start; gap: 16px; margin: 24px 0; }
-        .month-kpi-area { flex: 1; min-width: 0; }
+        .month-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "kpi cal" "list cal"; gap: 16px; align-items: start; margin: 24px 0; }
+        .month-kpi  { grid-area: kpi; }
+        .month-cal  { grid-area: cal; }
+        .month-list { grid-area: list; }
+        @media (max-width: 960px) {
+          .month-grid { grid-template-columns: 1fr; grid-template-areas: "kpi" "cal" "list"; }
+          .month-cal { max-width: 380px; justify-self: center; }
+        }
         @media (max-width: 640px) {
           .act-row { grid-template-columns: auto 1fr auto !important; }
           .act-time, .act-speed, .act-dl { display: none !important; }
-          .month-kpi-cal { flex-direction: column !important; align-items: stretch !important; }
           .cal-grid { grid-template-columns: repeat(7, 1fr) !important; }
           .cal-circle { width: 32px !important; height: 32px !important; }
           .cal-circle svg { width: 16px !important; height: 16px !important; }
@@ -554,7 +561,7 @@ export default function Dashboard() {
       <ActivityModal act={selectedAct} onClose={closeActivity} />
 
       {/* Header */}
-      <div className="header-pad" style={{ borderBottom: `1px solid ${C_BORDER}`, padding: "16px 32px", position: "sticky", top: 0, background: C_BG, zIndex: 10 }}>
+      <div className="header-pad" style={{ borderBottom: `1px solid ${C_BORDER}`, padding: "16px 32px", position: "sticky", top: 0, background: HEADER_BG, backdropFilter: HEADER_BLUR, WebkitBackdropFilter: HEADER_BLUR, zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {athlete?.avatar
@@ -585,28 +592,43 @@ export default function Dashboard() {
       </div>
 
       <div className="content-pad" style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
-        {/* KPI + Календарь */}
-        {selectedMonth !== null && filtered.length > 10 ? (
-          <div className="month-kpi-cal">
-            <div className="month-kpi-area">
-              <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
-                {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
-                {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
-                {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />}
-                {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />}
-                <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />
-              </div>
-            </div>
-            <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
+        {/* Год — сводка + рекорды; Месяц — KPI + список слева, календарь справа */}
+        {selectedMonth === null ? (
+          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
+            <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />
+            <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />
+            <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />
+            <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />
+            <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />
           </div>
         ) : (
-          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12, margin: "24px 0" }}>
-            {(selectedMonth === null || totalBikeKm > 0) && <KpiCard icon={Bike}       label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
-            {(selectedMonth === null || totalSwimKm > 0) && <KpiCard icon={Waves}      label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
-            {(selectedMonth === null || totalRunKm > 0)  && <KpiCard icon={SportShoe}  label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />}
-            {(selectedMonth === null || totalWalkKm > 0) && <KpiCard icon={Footprints} label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />}
-            {selectedMonth !== null && <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />}
-            {selectedMonth === null && <KpiCard icon={Timer} label="Время в движении" value={fmtTime(totalTimeSec)} sub="суммарно" />}
+          <div className="month-grid">
+            <div className="month-kpi kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+              {totalBikeKm > 0 && <KpiCard icon={Bike}         label="Велосипед"       value={`${totalBikeKm.toFixed(0)} км`}  sub={`${bikeActs.length} поездок`}  sub2={fmtTime(bikeTimeSec)}  color={C_BIKE} />}
+              {totalSwimKm > 0 && <KpiCard icon={Waves}        label="Плавание"        value={`${totalSwimKm.toFixed(1)} км`}  sub={`${swimActs.length} сессий`}   sub2={fmtTime(swimTimeSec)}  color={C_SWIM} />}
+              {totalRunKm  > 0 && <KpiCard icon={SportShoe}    label="Бег"             value={`${totalRunKm.toFixed(1)} км`}   sub={`${runActs.length} пробежек`}  sub2={fmtTime(runTimeSec)}   color={C_RUN} />}
+              {totalWalkKm > 0 && <KpiCard icon={Footprints}   label="Ходьба"          value={`${totalWalkKm.toFixed(1)} км`}  sub={`${walkActs.length} прогулок`} sub2={fmtTime(walkTimeSec)}  color={C_WALK} />}
+              <KpiCard icon={Hash}  label="Активностей"      value={filtered.length} sub="за месяц" />
+            </div>
+
+            <div className="month-cal">
+              <MonthCalendar activities={filtered} year={selectedYear} month={selectedMonth} />
+            </div>
+
+            <div className="month-list" style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px", boxShadow: CARD_SHADOW }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  {`Активности — ${MONTHS_FULL[selectedMonth]}`}
+                </div>
+                <div style={{ fontSize: 12, color: C_MUTED }}>{filtered.length} активностей</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {filtered.length === 0
+                  ? <div style={{ color: C_MUTED, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Нет активностей за этот период</div>
+                  : filtered.map(act => <ActivityRow key={act.stravaId} act={act} onClick={() => openActivity(act)} />)
+                }
+              </div>
+            </div>
           </div>
         )}
 
@@ -669,23 +691,6 @@ export default function Dashboard() {
             </div>
           );
         })()}
-
-
-        {/* Activity list — только на вкладке конкретного месяца */}
-        {selectedMonth !== null && <div style={{ background: C_SURFACE, border: `1px solid ${C_BORDER}`, borderRadius: 14, padding: "20px 24px", boxShadow: CARD_SHADOW }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C_MUTED, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              {`Активности — ${MONTHS_FULL[selectedMonth]}`}
-            </div>
-            <div style={{ fontSize: 12, color: C_MUTED }}>{filtered.length} активностей</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {filtered.length === 0
-              ? <div style={{ color: C_MUTED, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Нет активностей за этот период</div>
-              : filtered.map(act => <ActivityRow key={act.stravaId} act={act} onClick={() => openActivity(act)} />)
-            }
-          </div>
-        </div>}
       </div>
     </div>
   );
