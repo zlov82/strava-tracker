@@ -22,6 +22,12 @@ services:
       STRAVA_ATHLETE_ID: ${STRAVA_ATHLETE_ID:-133817559}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-https://strava.app.zlov.xyz}
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-test}
+      MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER:-https://strava.app.zlov.xyz}
+      MCP_OAUTH_CLIENT_ID: ${MCP_OAUTH_CLIENT_ID}
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET}
+      MCP_OAUTH_REDIRECT_URI: ${MCP_OAUTH_REDIRECT_URI:-https://claude.ai/api/mcp/auth_callback}
+      MCP_OAUTH_LOGIN_USERNAME: ${MCP_OAUTH_LOGIN_USERNAME:-owner}
+      MCP_OAUTH_LOGIN_PASSWORD: ${MCP_OAUTH_LOGIN_PASSWORD}
     volumes:
       - ./logs:/app/logs
     depends_on:
