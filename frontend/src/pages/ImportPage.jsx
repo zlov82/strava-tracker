@@ -8,6 +8,19 @@ const fmtTime = (s) => {
   return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
 };
 
+const fmtDistance = (meters, type) =>
+  type === "Swim" ? `${Math.round(meters)} м` : `${(meters / 1000).toFixed(1)} км`;
+
+const fmtAvgSpeed = (kmh, type) => {
+  if (!kmh) return null;
+  if (type === "Swim") {
+    const secPer100 = 100 / (kmh / 3.6);
+    const min = Math.floor(secPer100 / 60);
+    return `${min}:${String(Math.round(secPer100 % 60)).padStart(2, "0")} /100м`;
+  }
+  return `${kmh} км/ч`;
+};
+
 const Field = ({ label, value }) => (
   <div style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%)", border: `1px solid ${C_BORDER}`, borderRadius: 12, padding: "10px 14px", boxShadow: "0 1px 2px rgba(16,24,40,0.05), 0 6px 16px -10px rgba(16,24,40,0.14)" }}>
     <div style={{ fontSize: 10, color: C_MUTED, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{label}</div>
@@ -118,11 +131,11 @@ export default function ImportPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
               <Field label="Тип"           value={result.type} />
-              <Field label="Расстояние"    value={`${(result.distance / 1000).toFixed(1)} км`} />
+              <Field label="Расстояние"    value={fmtDistance(result.distance, result.type)} />
               <Field label="В движении"    value={fmtTime(result.movingTimeSec)} />
               <Field label="Общее время"   value={fmtTime(result.elapsedTimeSec)} />
               <Field label="Набор высоты"  value={`${Math.round(result.elevation)} м`} />
-              <Field label="Ср. скорость"  value={result.avgSpeed ? `${result.avgSpeed} км/ч` : null} />
+              <Field label={result.type === "Swim" ? "Ср. темп" : "Ср. скорость"} value={fmtAvgSpeed(result.avgSpeed, result.type)} />
               <Field label="Ср. пульс"     value={result.heartrate?.avg ? `${Math.round(result.heartrate.avg)} уд/мин` : null} />
               <Field label="Кругов"        value={result.laps?.length ?? 0} />
             </div>

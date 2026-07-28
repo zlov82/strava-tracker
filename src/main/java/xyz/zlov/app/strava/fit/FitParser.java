@@ -63,10 +63,15 @@ public class FitParser {
         a.setMovingTime(seconds(firstNonNull(session.getTotalTimerTime(), session.getTotalMovingTime(), session.getTotalElapsedTime())));
         a.setElapsedTime(seconds(session.getTotalElapsedTime()));
         a.setTotalElevationGain(session.getTotalAscent() != null ? session.getTotalAscent().doubleValue() : 0.0);
-        a.setAverageSpeed(toDouble(firstNonNull(session.getEnhancedAvgSpeed(), session.getAvgSpeed())));
-        a.setMaxSpeed(toDouble(firstNonNull(session.getEnhancedMaxSpeed(), session.getMaxSpeed())));
-        a.setAverageHeartrate(toDouble(session.getAvgHeartRate()));
-        a.setMaxHeartrate(toDouble(session.getMaxHeartRate()));
+        a.setAverageSpeed(firstNonNull(
+                toDouble(firstNonNull(session.getEnhancedAvgSpeed(), session.getAvgSpeed())),
+                speedFrom(a.getDistance(), a.getMovingTime())));
+        a.setMaxSpeed(firstNonNull(
+                toDouble(firstNonNull(session.getEnhancedMaxSpeed(), session.getMaxSpeed())),
+                maxSpeed(records)));
+        HrStats hrStats = hrStats(records, 0, records.size() - 1);
+        a.setAverageHeartrate(firstNonNull(toDouble(session.getAvgHeartRate()), hrStats.avg()));
+        a.setMaxHeartrate(firstNonNull(toDouble(session.getMaxHeartRate()), hrStats.max()));
         a.setAverageCadence(toDouble(session.getAvgCadence()));
         a.setAverageWatts(toDouble(session.getAvgPower()));
 
@@ -78,7 +83,7 @@ public class FitParser {
         long startTs = session.getStartTime() != null ? session.getStartTime().getTimestamp() : 0L;
         a.setStreamsRaw(buildStreams(records, startTs));
         a.setLapsRaw(buildLaps(messages.getLapMesgs(), records));
-        a.setActivityRaw(buildActivityRaw(session));
+        a.setActivityRaw(buildActivityRaw(session, a));
         a.setMapPolyline(buildPolyline(records));
 
         return a;
@@ -151,10 +156,15 @@ public class FitParser {
 
         boolean hasAlt = false, hasVel = false, hasHr = false, hasCad = false, hasWatts = false;
 
+        Float lastDistance = null;
         for (RecordMesg r : records) {
             long ts = r.getTimestamp() != null ? r.getTimestamp().getTimestamp() : startTs;
             time.add(ts - startTs);
-            addFloat(distance, r.getDistance());
+            Float recordDistance = r.getDistance();
+            if (recordDistance != null) {
+                lastDistance = recordDistance;
+            }
+            addFloat(distance, firstNonNull(recordDistance, lastDistance));
 
             Float alt = firstNonNull(r.getEnhancedAltitude(), r.getAltitude());
             hasAlt |= addFloat(altitude, alt);
@@ -201,14 +211,17 @@ public class FitParser {
             node.put("distance", orZero(lap.getTotalDistance()));
             putIntOrNull(node, "moving_time", seconds(firstNonNull(lap.getTotalMovingTime(), lap.getTotalTimerTime(), lap.getTotalElapsedTime())));
             putDoubleOrNull(node, "total_elevation_gain", lap.getTotalAscent() != null ? lap.getTotalAscent().doubleValue() : null);
-            putDoubleOrNull(node, "average_speed", toDouble(firstNonNull(lap.getEnhancedAvgSpeed(), lap.getAvgSpeed())));
+            putDoubleOrNull(node, "average_speed", firstNonNull(
+                    toDouble(firstNonNull(lap.getEnhancedAvgSpeed(), lap.getAvgSpeed())),
+                    speedFrom(orZero(lap.getTotalDistance()),
+                            seconds(firstNonNull(lap.getTotalMovingTime(), lap.getTotalTimerTime(), lap.getTotalElapsedTime())))));
             putDoubleOrNull(node, "max_speed", toDouble(lap.getMaxSpeed()));
-            putDoubleOrNull(node, "average_heartrate", toDouble(lap.getAvgHeartRate()));
-            putDoubleOrNull(node, "max_heartrate", toDouble(lap.getMaxHeartRate()));
+            int[] range = lapRange(lap, recTimes);
+            HrStats lapHr = hrStats(records, range[0], range[1]);
+            putDoubleOrNull(node, "average_heartrate", firstNonNull(toDouble(lap.getAvgHeartRate()), lapHr.avg()));
+            putDoubleOrNull(node, "max_heartrate", firstNonNull(toDouble(lap.getMaxHeartRate()), lapHr.max()));
             putDoubleOrNull(node, "average_cadence", toDouble(lap.getAvgCadence()));
             putDoubleOrNull(node, "average_watts", toDouble(lap.getAvgPower()));
-
-            int[] range = lapRange(lap, recTimes);
             node.put("start_index", range[0]);
             node.put("end_index", range[1]);
             arr.add(node);
@@ -233,11 +246,11 @@ public class FitParser {
 
     // ── activity_raw (fields read by ActivityService.buildTrainerRideDto) ─────────
 
-    private String buildActivityRaw(SessionMesg session) {
+    private String buildActivityRaw(SessionMesg session, Activity activity) {
         ObjectNode node = MAPPER.createObjectNode();
         putDoubleOrNull(node, "max_watts", toDouble(session.getMaxPower()));
-        putDoubleOrNull(node, "max_heartrate", toDouble(session.getMaxHeartRate()));
-        putDoubleOrNull(node, "average_heartrate", toDouble(session.getAvgHeartRate()));
+        putDoubleOrNull(node, "max_heartrate", activity.getMaxHeartrate());
+        putDoubleOrNull(node, "average_heartrate", activity.getAverageHeartrate());
         node.put("description", "");
         return node.toString();
     }
@@ -300,6 +313,49 @@ public class FitParser {
 
     private static int seconds(Float f) {
         return f != null ? Math.round(f) : 0;
+    }
+
+    private static Double speedFrom(Double distanceMeters, Integer seconds) {
+        if (distanceMeters == null || seconds == null || distanceMeters <= 0 || seconds <= 0) return null;
+        return distanceMeters / seconds;
+    }
+
+    private static Double maxSpeed(List<RecordMesg> records) {
+        Double max = null;
+        for (RecordMesg record : records) {
+            Double speed = toDouble(firstNonNull(record.getEnhancedSpeed(), record.getSpeed()));
+            if (speed != null && (max == null || speed > max)) {
+                max = speed;
+            }
+        }
+        return max;
+    }
+
+    private static HrStats hrStats(List<RecordMesg> records, int from, int to) {
+        if (records.isEmpty() || from < 0 || to < from) return HrStats.empty();
+
+        int start = Math.max(from, 0);
+        int end = Math.min(to, records.size() - 1);
+        int count = 0;
+        int sum = 0;
+        Short max = null;
+        for (int i = start; i <= end; i++) {
+            Short hr = records.get(i).getHeartRate();
+            if (hr == null || hr <= 0) continue;
+            count++;
+            sum += hr;
+            if (max == null || hr > max) {
+                max = hr;
+            }
+        }
+
+        return count == 0 ? HrStats.empty() : new HrStats(sum / (double) count, max.doubleValue());
+    }
+
+    private record HrStats(Double avg, Double max) {
+        private static HrStats empty() {
+            return new HrStats(null, null);
+        }
     }
 
     private static String capitalize(String s) {

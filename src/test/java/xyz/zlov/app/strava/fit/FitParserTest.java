@@ -8,6 +8,7 @@ import xyz.zlov.app.strava.activity.Activity;
 import java.io.InputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -60,5 +61,42 @@ class FitParserTest {
         int size = streams.get("time").get("data").size();
         streams.fieldNames().forEachRemaining(k ->
                 assertEquals(size, streams.get(k).get("data").size(), "stream " + k + " length mismatch"));
+    }
+
+    @Test
+    void parsesPoolSwimWithDerivedPaceAndStableDistanceStream() throws Exception {
+        byte[] bytes;
+        try (InputStream in = getClass().getResourceAsStream("/fit/19331936841.fit")) {
+            assertNotNull(in, "test swim FIT resource missing");
+            bytes = in.readAllBytes();
+        }
+
+        Activity a = new FitParser().parse(bytes, 19331936841L);
+
+        assertEquals("Swim", a.getType());
+        assertEquals("Swim", a.getSportType());
+        assertEquals(1150.0, a.getDistance(), 0.1);
+        assertEquals(2203, a.getMovingTime());
+        assertNotNull(a.getAverageSpeed(), "pool swim should derive average speed from distance/time");
+        assertTrue(a.getAverageSpeed() > 0, "derived swim speed should be > 0");
+        assertEquals(106.98, a.getAverageHeartrate(), 0.01);
+        assertEquals(120.0, a.getMaxHeartrate(), 0.1);
+
+        JsonNode streams = MAPPER.readTree(a.getStreamsRaw());
+        JsonNode distance = streams.get("distance").get("data");
+        assertEquals(333, distance.size());
+        assertFalse(distance.get(distance.size() - 1).isNull(), "distance stream should carry last known distance");
+        assertEquals(1150.0, distance.get(distance.size() - 1).asDouble(), 0.1);
+
+        JsonNode laps = MAPPER.readTree(a.getLapsRaw());
+        assertEquals(40, laps.size());
+        assertTrue(laps.get(1).get("average_speed").asDouble() > 0, "moving swim lap should derive average speed");
+        assertEquals(104.2, laps.get(9).get("average_heartrate").asDouble(), 0.1);
+        assertEquals(109.0, laps.get(9).get("max_heartrate").asDouble(), 0.1);
+        assertTrue(laps.get(0).get("average_speed").isNull(), "rest lap with zero distance should not derive speed");
+
+        JsonNode activityRaw = MAPPER.readTree(a.getActivityRaw());
+        assertEquals(106.98, activityRaw.get("average_heartrate").asDouble(), 0.01);
+        assertEquals(120.0, activityRaw.get("max_heartrate").asDouble(), 0.1);
     }
 }
