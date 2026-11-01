@@ -2,6 +2,7 @@ package xyz.zlov.app.strava.activity.dto;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 public record TrainerRideDto(
         Long stravaId,
@@ -21,7 +22,8 @@ public record TrainerRideDto(
         List<LapDto> laps,
         String description,
         boolean commute,
-        boolean trainer
+        boolean trainer,
+        Map<String, Double> bestPower
 ) {
     public record Stats(Double avg, Double max, Double min) {}
 
@@ -34,6 +36,11 @@ public record TrainerRideDto(
             Double elevationGain,
             Stats heartrate,
             Stats watts,
-            AvgMin cadence
+            AvgMin cadence,
+            Integer startSec,
+            Integer endSec,
+            Integer elapsedTimeSec,
+            Integer startIndex,
+            Integer endIndex
     ) {}
 }
