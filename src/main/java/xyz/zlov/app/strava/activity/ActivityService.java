@@ -137,6 +137,7 @@ public class ActivityService {
             }
         }
 
+        boolean realPower = PowerSource.isReal(activity);
         StreamData streamData = null;
         if (activity.getStreamsRaw() != null) {
             try {
@@ -166,10 +167,9 @@ public class ActivityService {
                             doubleOrNull(lap, "average_heartrate"),
                             doubleOrNull(lap, "max_heartrate"),
                             lapMinHr);
-                    TrainerRideDto.Stats lapWatts = statsOrNull(
-                            doubleOrNull(lap, "average_watts"),
-                            lapMaxWatts,
-                            lapMinWatts);
+                    TrainerRideDto.Stats lapWatts = realPower
+                            ? statsOrNull(doubleOrNull(lap, "average_watts"), lapMaxWatts, lapMinWatts)
+                            : null;
                     Double lapAvgCadence = doubleOrNull(lap, "average_cadence");
                     TrainerRideDto.AvgMin lapCadence = lapAvgCadence != null
                             ? new TrainerRideDto.AvgMin(lapAvgCadence, lapMinCadence)
@@ -196,13 +196,15 @@ public class ActivityService {
         }
 
         TrainerRideDto.Stats heartrate = statsOrNull(avgHr, maxHr, minHr);
-        TrainerRideDto.Stats watts = statsOrNull(
-                activity.getAverageWatts(), maxWatts, minWatts);
+        // Strava-estimated power (outdoor, no meter) is not trustworthy: hide it instead of showing it.
+        TrainerRideDto.Stats watts = realPower
+                ? statsOrNull(activity.getAverageWatts(), maxWatts, minWatts)
+                : null;
         TrainerRideDto.Stats cadence = statsOrNull(
                 activity.getAverageCadence(), maxCadence, minCadence);
 
         Map<String, Double> bestPower = null;
-        if (streamData != null && hasRealPower(activity)) {
+        if (streamData != null && realPower) {
             Map<String, Double> curve = PowerCurve.best(streamData);
             if (!curve.isEmpty()) bestPower = curve;
         }
@@ -224,23 +226,14 @@ public class ActivityService {
                 activity.getDescription(),
                 Boolean.TRUE.equals(activity.getCommute()),
                 Boolean.TRUE.equals(activity.getTrainer()),
+                realPower,
                 bestPower
         );
     }
 
-    /**
-     * Power is "real" (sensor or trainer) when the activity was done on a trainer or Strava/FIT flagged
-     * {@code device_watts}. Outdoor rides without a meter get Strava-estimated watts, which are not trusted.
-     */
+    /** See {@link PowerSource#isReal(Activity)}. */
     public boolean hasRealPower(Activity activity) {
-        if (Boolean.TRUE.equals(activity.getTrainer())) return true;
-        if (activity.getActivityRaw() == null) return false;
-        try {
-            JsonNode node = MAPPER.readTree(activity.getActivityRaw());
-            return node.path("device_watts").asBoolean(false);
-        } catch (JsonProcessingException e) {
-            return false;
-        }
+        return PowerSource.isReal(activity);
     }
 
     private TrainerRideDto.Stats statsOrNull(Double avg, Double max, Double min) {

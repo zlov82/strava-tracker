@@ -23,6 +23,7 @@ public record TrainerRideDto(
         String description,
         boolean commute,
         boolean trainer,
+        boolean hasDeviceWatts,
         Map<String, Double> bestPower
 ) {
     public record Stats(Double avg, Double max, Double min) {}

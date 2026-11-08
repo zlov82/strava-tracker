@@ -6,6 +6,7 @@ import xyz.zlov.app.strava.activity.dto.RideStreamsDto;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.fit.FitParser;
+import xyz.zlov.app.strava.mcp.dto.RecentActivityDto;
 
 import java.io.InputStream;
 import java.util.List;
@@ -65,6 +66,9 @@ class TrainerFitIntegrationTest {
         assertNotNull(l2.startIndex());
         assertTrue(l2.endIndex() > l2.startIndex());
 
+        assertTrue(dto.hasDeviceWatts());
+        assertNotNull(dto.watts());
+        assertNotNull(dto.laps().get(1).watts());
         assertNotNull(dto.bestPower());
         double p5s = dto.bestPower().get("5s");
         double p1min = dto.bestPower().get("1min");
@@ -131,5 +135,43 @@ class TrainerFitIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> analysis.getTimeInZones(TRAINER_ID, List.of(150, 120), null, null, null, null));
         assertThrows(IllegalArgumentException.class, () -> analysis.getStreams(999L, List.of("time"), null, null, null));
         assertThrows(IllegalArgumentException.class, () -> analysis.getStreams(TRAINER_ID, List.of(), null, null, null));
+    }
+
+    @Test
+    void estimatedPowerIsHiddenAndRealPowerOutdoorIsShown() throws Exception {
+        // Outdoor ride, Strava-estimated watts: trainer=false, device_watts=false
+        Activity estimated = parse("/fit/19166201899.fit", OUTDOOR_ID);
+        estimated.setAverageWatts(150.0);
+        estimated.setActivityRaw("{\"max_watts\":300.0,\"device_watts\":false}");
+        estimated.setLapsRaw("[{\"lap_index\":1,\"distance\":1000.0,\"average_watts\":150.0,\"start_index\":0,\"end_index\":100}]");
+
+        TrainerRideDto hidden = activityService.buildTrainerRideDto(estimated);
+        assertFalse(hidden.hasDeviceWatts());
+        assertNull(hidden.watts(), "estimated power must be hidden");
+        assertNull(hidden.laps().getFirst().watts());
+        assertNull(hidden.bestPower());
+
+        RecentActivityDto listed = RecentActivityDto.from(estimated);
+        assertFalse(listed.hasDeviceWatts());
+        assertNull(listed.averageWatts());
+
+        // Same ride with a real power meter (device_watts=true)
+        estimated.setActivityRaw("{\"max_watts\":300.0,\"device_watts\":true}");
+        TrainerRideDto shown = activityService.buildTrainerRideDto(estimated);
+        assertTrue(shown.hasDeviceWatts());
+        assertEquals(150.0, shown.watts().avg());
+        assertEquals(150.0, shown.laps().getFirst().watts().avg());
+        assertEquals(150.0, RecentActivityDto.from(estimated).averageWatts());
+
+        // Summary-only row (no activity_raw yet) and not a trainer ride: unknown counts as not real
+        estimated.setActivityRaw(null);
+        assertFalse(RecentActivityDto.from(estimated).hasDeviceWatts());
+    }
+
+    @Test
+    void trainerRideListsPowerAsReal() {
+        RecentActivityDto listed = RecentActivityDto.from(trainer);
+        assertTrue(listed.hasDeviceWatts());
+        assertNotNull(listed.averageWatts());
     }
 }
