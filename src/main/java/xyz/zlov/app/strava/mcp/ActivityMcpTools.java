@@ -8,15 +8,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import xyz.zlov.app.strava.activity.ActivityRepository;
 import xyz.zlov.app.strava.activity.ActivityService;
+import xyz.zlov.app.strava.activity.StravaDetailsUnavailableException;
 import xyz.zlov.app.strava.activity.StreamAnalysisService;
+import xyz.zlov.app.strava.activity.dto.ActivitiesBatchDto;
 import xyz.zlov.app.strava.activity.dto.RideStreamsDto;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.mcp.dto.RecentActivityDto;
 
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -72,15 +74,24 @@ public class ActivityMcpTools {
     }
 
     @Tool(description = "Get full trainer-ready detail (same as getActivity) for multiple activities at once, " +
-            "by Strava activity ids. Unknown ids are silently skipped.")
-    public List<TrainerRideDto> getActivities(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
-        return stravaIds.stream()
-                .map(id -> activityService.fetchAndCacheDetails(id)
+            "by Strava activity ids. Returns {activities, failed}: activities that could be loaded, in request order, " +
+            "and failed = [{stravaId, reason}] for ids that are unknown or whose details are not stored. " +
+            "One bad id never fails the whole call.")
+    public ActivitiesBatchDto getActivities(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
+        List<TrainerRideDto> loaded = new ArrayList<>();
+        List<ActivitiesBatchDto.Failure> failed = new ArrayList<>();
+        for (Long id : stravaIds == null ? List.<Long>of() : stravaIds) {
+            try {
+                activityService.fetchAndCacheDetails(id)
                         .flatMap(a -> activityService.fetchAndCacheStreams(id))
                         .map(activityService::buildTrainerRideDto)
-                        .orElse(null))
-                .filter(Objects::nonNull)
-                .toList();
+                        .ifPresentOrElse(loaded::add,
+                                () -> failed.add(new ActivitiesBatchDto.Failure(id, "Activity not found")));
+            } catch (StravaDetailsUnavailableException | IllegalArgumentException e) {
+                failed.add(new ActivitiesBatchDto.Failure(id, e.getMessage()));
+            }
+        }
+        return new ActivitiesBatchDto(loaded, failed);
     }
 
     @Tool(description = "Get per-second streams of an activity as equal-length arrays, one per requested stream. " +
