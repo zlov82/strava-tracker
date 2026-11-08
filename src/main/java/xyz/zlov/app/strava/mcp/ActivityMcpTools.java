@@ -60,20 +60,20 @@ public class ActivityMcpTools {
         return (timezone == null || timezone.isBlank()) ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
     }
 
-    @Tool(description = "Get full trainer-ready detail for a single cycling ride by its Strava activity id, " +
-            "including heart rate/power/cadence stats and a per-lap breakdown. Laps carry startSec/endSec/elapsedTimeSec " +
+    @Tool(description = "Get full trainer-ready detail for a single activity (ride, trainer ride, swim, walk, run, ...) " +
+            "by its Strava activity id, including heart rate/power/cadence stats and a per-lap breakdown. Laps carry startSec/endSec/elapsedTimeSec " +
             "(seconds from activity start) and startIndex/endIndex into the streams. bestPower holds the best average " +
             "power for 5s..60min windows, only for real (sensor/trainer) power. stops lists stops of 20 s or more.")
-    public TrainerRideDto getRide(@ToolParam(description = "Strava activity id") Long stravaId) {
+    public TrainerRideDto getActivity(@ToolParam(description = "Strava activity id") Long stravaId) {
         return activityService.fetchAndCacheDetails(stravaId)
                 .flatMap(a -> activityService.fetchAndCacheStreams(stravaId))
                 .map(activityService::buildTrainerRideDto)
                 .orElseThrow(() -> new IllegalArgumentException("Activity not found: " + stravaId));
     }
 
-    @Tool(description = "Get full trainer-ready detail for multiple cycling rides at once, by Strava activity ids. " +
-            "Unknown ids are silently skipped.")
-    public List<TrainerRideDto> getRides(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
+    @Tool(description = "Get full trainer-ready detail (same as getActivity) for multiple activities at once, " +
+            "by Strava activity ids. Unknown ids are silently skipped.")
+    public List<TrainerRideDto> getActivities(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
         return stravaIds.stream()
                 .map(id -> activityService.fetchAndCacheDetails(id)
                         .flatMap(a -> activityService.fetchAndCacheStreams(id))
@@ -88,7 +88,7 @@ public class ActivityMcpTools {
             "moving (0/1, derived from speed), temp (usually unavailable; listed in 'unavailable'). " +
             "Without resolution the response is capped at 2000 points (downsampled by averaging). " +
             "Use fromSec/toSec to read one interval at full resolution.")
-    public RideStreamsDto getRideStreams(
+    public RideStreamsDto getActivityStreams(
             @ToolParam(description = "Strava activity id") Long stravaId,
             @ToolParam(description = "Streams to return, e.g. [\"time\",\"heartrate\",\"watts\"]") List<String> streams,
             @ToolParam(description = "Max number of points after downsampling (e.g. 500). Default cap 2000.", required = false)
