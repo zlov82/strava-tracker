@@ -208,6 +208,7 @@ public class FitParser {
         for (LapMesg lap : laps) {
             ObjectNode node = MAPPER.createObjectNode();
             node.put("lap_index", lapIndex++);
+            putIntOrNull(node, "elapsed_time", seconds(lap.getTotalElapsedTime()));
             node.put("distance", orZero(lap.getTotalDistance()));
             putIntOrNull(node, "moving_time", seconds(firstNonNull(lap.getTotalMovingTime(), lap.getTotalTimerTime(), lap.getTotalElapsedTime())));
             putDoubleOrNull(node, "total_elevation_gain", lap.getTotalAscent() != null ? lap.getTotalAscent().doubleValue() : null);
@@ -249,6 +250,8 @@ public class FitParser {
     private String buildActivityRaw(SessionMesg session, Activity activity) {
         ObjectNode node = MAPPER.createObjectNode();
         putDoubleOrNull(node, "max_watts", toDouble(session.getMaxPower()));
+        // Power in a FIT file always comes from a sensor/trainer, never Strava's estimate.
+        node.put("device_watts", session.getAvgPower() != null);
         putDoubleOrNull(node, "max_heartrate", activity.getMaxHeartrate());
         putDoubleOrNull(node, "average_heartrate", activity.getAverageHeartrate());
         node.put("description", "");
