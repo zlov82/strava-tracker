@@ -24,8 +24,12 @@ public record TrainerRideDto(
         boolean commute,
         boolean trainer,
         boolean hasDeviceWatts,
-        Map<String, Double> bestPower
+        Map<String, Double> bestPower,
+        List<Stop> stops
 ) {
+    /** A stop of at least 20 s: seconds from start, length, and distance covered when it began (m). */
+    public record Stop(int startSec, int durationSec, Double atDistanceM) {}
+
     public record Stats(Double avg, Double max, Double min) {}
 
     public record AvgMin(Double avg, Double min) {}

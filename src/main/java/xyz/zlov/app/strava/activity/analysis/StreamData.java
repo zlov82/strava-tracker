@@ -73,6 +73,20 @@ public final class StreamData {
 
     public boolean moving(int i) { return moving[i]; }
 
+    /** Sum of positive altitude steps over [from, to] (inclusive), or null when there is no altitude stream. */
+    public Double elevationGain(int from, int to) {
+        double[] alt = series.get("altitude");
+        if (alt == null) return null;
+        double gain = 0;
+        double prev = Double.NaN;
+        for (int i = Math.max(from, 0); i <= to && i < alt.length; i++) {
+            if (Double.isNaN(alt[i])) continue;
+            if (!Double.isNaN(prev) && alt[i] > prev) gain += alt[i] - prev;
+            prev = alt[i];
+        }
+        return Math.round(gain * 10.0) / 10.0;
+    }
+
     /** Seconds the value at point i is considered to hold (until the next sample, gaps capped). */
     public int durationSec(int i) {
         if (i >= time.length - 1) return 1;

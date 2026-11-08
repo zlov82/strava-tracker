@@ -3,6 +3,7 @@ package xyz.zlov.app.strava.mcp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import xyz.zlov.app.strava.activity.ActivityRepository;
@@ -13,6 +14,7 @@ import xyz.zlov.app.strava.activity.dto.TimeInZonesDto;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.mcp.dto.RecentActivityDto;
 
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 
@@ -27,22 +29,41 @@ public class ActivityMcpTools {
     private final ActivityService activityService;
     private final StreamAnalysisService streamAnalysisService;
 
-    @Tool(description = "List the athlete's most recent training activities across all sport types " +
-            "(run, ride, swim, etc.), newest first. Use this to see recent training load before asking " +
-            "for detailed ride data.")
+    /** Zone used to read 'from'/'to' as local dates; empty = server default. */
+    @Value("${app.timezone:}")
+    private String timezone;
+
+    @Tool(description = "List the athlete's training activities across all sport types, newest first. " +
+            "Optionally filter by local date range (from/to, inclusive, yyyy-MM-dd) and by sport type " +
+            "(Ride = outdoor ride, VirtualRide = trainer ride, Swim, Walk, Run, ...; case-insensitive). " +
+            "Use this to see training load before asking for detailed ride data. hasDeviceWatts tells whether " +
+            "power is real (power meter/trainer); estimated power is not returned.")
     public List<RecentActivityDto> listRecentActivities(
             @ToolParam(description = "Max number of activities to return, most recent first. Defaults to 20, capped at 100.", required = false)
-            Integer limit) {
+            Integer limit,
+            @ToolParam(description = "First local date to include, yyyy-MM-dd", required = false)
+            String from,
+            @ToolParam(description = "Last local date to include, yyyy-MM-dd", required = false)
+            String to,
+            @ToolParam(description = "Sport type filter, e.g. Ride, VirtualRide, Swim, Walk, Run", required = false)
+            String type) {
         int size = (limit == null || limit <= 0) ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
-        return activityRepository.findAllByOrderByStartDateDesc(PageRequest.of(0, size))
+        DateRange range = DateRange.of(from, to, zone());
+        String sport = type == null ? "" : type.trim();
+        return activityRepository.findFiltered(range.from(), range.to(), sport, PageRequest.of(0, size))
+                .stream()
                 .map(RecentActivityDto::from)
-                .getContent();
+                .toList();
+    }
+
+    private ZoneId zone() {
+        return (timezone == null || timezone.isBlank()) ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
     }
 
     @Tool(description = "Get full trainer-ready detail for a single cycling ride by its Strava activity id, " +
             "including heart rate/power/cadence stats and a per-lap breakdown. Laps carry startSec/endSec/elapsedTimeSec " +
             "(seconds from activity start) and startIndex/endIndex into the streams. bestPower holds the best average " +
-            "power for 5s..60min windows, only for real (sensor/trainer) power.")
+            "power for 5s..60min windows, only for real (sensor/trainer) power. stops lists stops of 20 s or more.")
     public TrainerRideDto getRide(@ToolParam(description = "Strava activity id") Long stravaId) {
         return activityService.fetchAndCacheDetails(stravaId)
                 .flatMap(a -> activityService.fetchAndCacheStreams(stravaId))

@@ -20,6 +20,19 @@ public interface ActivityRepository extends JpaRepository<Activity, Long> {
 
     Page<Activity> findAllByOrderByStartDateDesc(Pageable pageable);
 
+    /**
+     * Activities in [from, to), newest first. {@code type} (case-insensitive, '' = any) matches sport_type,
+     * falling back to type when sport_type is empty, so FIT imports and Strava syncs filter the same way.
+     */
+    @Query("""
+            SELECT a FROM Activity a
+            WHERE a.startDate >= :from AND a.startDate < :to
+              AND (:type = '' OR LOWER(COALESCE(a.sportType, a.type)) = LOWER(:type))
+            ORDER BY a.startDate DESC
+            """)
+    List<Activity> findFiltered(@Param("from") Instant from, @Param("to") Instant to,
+                                @Param("type") String type, Pageable pageable);
+
     @Query(value = """
             SELECT to_char(date_trunc('week', start_date), 'IYYY-"W"IW') AS week,
                    round(cast(sum(distance) / 1000.0 AS numeric), 1)     AS km

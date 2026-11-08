@@ -174,4 +174,29 @@ class TrainerFitIntegrationTest {
         assertTrue(listed.hasDeviceWatts());
         assertNotNull(listed.averageWatts());
     }
+
+    @Test
+    void trainerLapsGetElevationFromAltitudeStream() {
+        TrainerRideDto dto = activityService.buildTrainerRideDto(trainer);
+
+        double sum = 0;
+        for (TrainerRideDto.LapDto lap : dto.laps()) {
+            assertNotNull(lap.elevationGain(), "lap " + lap.lapNum() + " has no elevation");
+            assertTrue(lap.elevationGain() >= 0);
+            sum += lap.elevationGain();
+        }
+        // session ascent is 386 m; lap sums must be in the same ballpark
+        assertEquals(trainer.getTotalElevationGain(), sum, trainer.getTotalElevationGain() * 0.15,
+                "sum of lap gains " + sum + " vs session " + trainer.getTotalElevationGain());
+    }
+
+    @Test
+    void stopsAreExposed() {
+        assertNotNull(activityService.buildTrainerRideDto(trainer).stops());
+        TrainerRideDto outdoorDto = activityService.buildTrainerRideDto(outdoor);
+        assertNotNull(outdoorDto.stops());
+        // outdoor ride is 8867 s elapsed vs 8036 s moving: there must be stops
+        assertFalse(outdoorDto.stops().isEmpty(), "outdoor ride should have stops");
+        outdoorDto.stops().forEach(st -> assertTrue(st.durationSec() >= 20));
+    }
 }
