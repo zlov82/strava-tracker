@@ -7,8 +7,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientResponseException;
 import xyz.zlov.app.strava.activity.analysis.LapBounds;
 import xyz.zlov.app.strava.activity.analysis.PowerCurve;
+import xyz.zlov.app.strava.activity.analysis.StopDetector;
 import xyz.zlov.app.strava.activity.analysis.StreamData;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.strava.StravaClient;
@@ -20,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -37,8 +40,8 @@ public class ActivityService {
         if (activity == null) return Optional.empty();
         if (activity.getActivityRaw() != null) return Optional.of(activity);
 
-        String activityJson = stravaClient.getActivityRaw(stravaId);
-        String lapsJson     = stravaClient.getActivityLapsRaw(stravaId);
+        String activityJson = fromStrava(stravaId, () -> stravaClient.getActivityRaw(stravaId));
+        String lapsJson     = fromStrava(stravaId, () -> stravaClient.getActivityLapsRaw(stravaId));
 
         activity.setActivityRaw(activityJson);
         activity.setLapsRaw(lapsJson);
@@ -64,11 +67,23 @@ public class ActivityService {
         if (activity == null) return Optional.empty();
         if (activity.getStreamsRaw() != null) return Optional.of(activity);
 
-        activity.setStreamsRaw(stravaClient.getActivityStreamsRaw(stravaId));
+        activity.setStreamsRaw(fromStrava(stravaId, () -> stravaClient.getActivityStreamsRaw(stravaId)));
         activityRepository.save(activity);
         return Optional.of(activity);
     }
 
+
+    /** Strava answers 403 (Inactive) once the app lost API access: turn it into an actionable message. */
+    private <T> T fromStrava(Long stravaId, Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 403) {
+                throw new StravaDetailsUnavailableException(stravaId, e);
+            }
+            throw e;
+        }
+    }
 
     @Transactional
     public void upsertActivities(List<StravaActivityDto> dtos) {
@@ -137,6 +152,8 @@ public class ActivityService {
             }
         }
 
+        Boolean hasDeviceWatts = PowerSource.hasDeviceWatts(activity);
+        boolean realPower = Boolean.TRUE.equals(hasDeviceWatts);
         StreamData streamData = null;
         if (activity.getStreamsRaw() != null) {
             try {
@@ -166,10 +183,9 @@ public class ActivityService {
                             doubleOrNull(lap, "average_heartrate"),
                             doubleOrNull(lap, "max_heartrate"),
                             lapMinHr);
-                    TrainerRideDto.Stats lapWatts = statsOrNull(
-                            doubleOrNull(lap, "average_watts"),
-                            lapMaxWatts,
-                            lapMinWatts);
+                    TrainerRideDto.Stats lapWatts = realPower
+                            ? statsOrNull(doubleOrNull(lap, "average_watts"), lapMaxWatts, lapMinWatts)
+                            : null;
                     Double lapAvgCadence = doubleOrNull(lap, "average_cadence");
                     TrainerRideDto.AvgMin lapCadence = lapAvgCadence != null
                             ? new TrainerRideDto.AvgMin(lapAvgCadence, lapMinCadence)
@@ -178,6 +194,11 @@ public class ActivityService {
                     Integer lapMovingTime = lap.has("moving_time") && !lap.get("moving_time").isNull()
                             ? lap.get("moving_time").asInt() : null;
                     Double lapElevation = doubleOrNull(lap, "total_elevation_gain");
+                    if (lapElevation == null && streamData != null
+                            && validRange(startIdx, endIdx, streamData)) {
+                        // FIT laps from a trainer carry no ascent: derive it from the altitude stream
+                        lapElevation = streamData.elevationGain(startIdx, endIdx);
+                    }
 
                     LapBounds bounds = LapBounds.of(lap, streamData, fallbackNum);
 
@@ -196,13 +217,19 @@ public class ActivityService {
         }
 
         TrainerRideDto.Stats heartrate = statsOrNull(avgHr, maxHr, minHr);
-        TrainerRideDto.Stats watts = statsOrNull(
-                activity.getAverageWatts(), maxWatts, minWatts);
+        // Strava-estimated power (outdoor, no meter) is not trustworthy: hide it instead of showing it.
+        TrainerRideDto.Stats watts = realPower
+                ? statsOrNull(activity.getAverageWatts(), maxWatts, minWatts)
+                : null;
         TrainerRideDto.Stats cadence = statsOrNull(
                 activity.getAverageCadence(), maxCadence, minCadence);
 
+        List<TrainerRideDto.Stop> stops = streamData != null
+                ? StopDetector.detect(streamData, StopDetector.MIN_STOP_SEC)
+                : null;
+
         Map<String, Double> bestPower = null;
-        if (streamData != null && hasRealPower(activity)) {
+        if (streamData != null && realPower) {
             Map<String, Double> curve = PowerCurve.best(streamData);
             if (!curve.isEmpty()) bestPower = curve;
         }
@@ -224,23 +251,19 @@ public class ActivityService {
                 activity.getDescription(),
                 Boolean.TRUE.equals(activity.getCommute()),
                 Boolean.TRUE.equals(activity.getTrainer()),
-                bestPower
+                hasDeviceWatts,
+                bestPower,
+                stops
         );
     }
 
-    /**
-     * Power is "real" (sensor or trainer) when the activity was done on a trainer or Strava/FIT flagged
-     * {@code device_watts}. Outdoor rides without a meter get Strava-estimated watts, which are not trusted.
-     */
+    private static boolean validRange(int startIdx, int endIdx, StreamData data) {
+        return startIdx >= 0 && endIdx >= startIdx && endIdx < data.size();
+    }
+
+    /** See {@link PowerSource#isReal(Activity)}. */
     public boolean hasRealPower(Activity activity) {
-        if (Boolean.TRUE.equals(activity.getTrainer())) return true;
-        if (activity.getActivityRaw() == null) return false;
-        try {
-            JsonNode node = MAPPER.readTree(activity.getActivityRaw());
-            return node.path("device_watts").asBoolean(false);
-        } catch (JsonProcessingException e) {
-            return false;
-        }
+        return PowerSource.isReal(activity);
     }
 
     private TrainerRideDto.Stats statsOrNull(Double avg, Double max, Double min) {

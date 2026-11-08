@@ -3,18 +3,22 @@ package xyz.zlov.app.strava.mcp;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import xyz.zlov.app.strava.activity.ActivityRepository;
 import xyz.zlov.app.strava.activity.ActivityService;
+import xyz.zlov.app.strava.activity.StravaDetailsUnavailableException;
 import xyz.zlov.app.strava.activity.StreamAnalysisService;
+import xyz.zlov.app.strava.activity.dto.ActivitiesBatchDto;
 import xyz.zlov.app.strava.activity.dto.RideStreamsDto;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.mcp.dto.RecentActivityDto;
 
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -27,39 +31,67 @@ public class ActivityMcpTools {
     private final ActivityService activityService;
     private final StreamAnalysisService streamAnalysisService;
 
-    @Tool(description = "List the athlete's most recent training activities across all sport types " +
-            "(run, ride, swim, etc.), newest first. Use this to see recent training load before asking " +
-            "for detailed ride data.")
+    /** Zone used to read 'from'/'to' as local dates; empty = server default. */
+    @Value("${app.timezone:}")
+    private String timezone;
+
+    @Tool(description = "List the athlete's training activities across all sport types, newest first. " +
+            "Optionally filter by local date range (from/to, inclusive, yyyy-MM-dd) and by sport type " +
+            "(Ride = outdoor ride, VirtualRide = trainer ride, Swim, Walk, Run, ...; case-insensitive). " +
+            "Use this to see training load before asking for detailed ride data. hasDeviceWatts tells whether " +
+            "power is real (power meter/trainer); estimated power is not returned.")
     public List<RecentActivityDto> listRecentActivities(
             @ToolParam(description = "Max number of activities to return, most recent first. Defaults to 20, capped at 100.", required = false)
-            Integer limit) {
+            Integer limit,
+            @ToolParam(description = "First local date to include, yyyy-MM-dd", required = false)
+            String from,
+            @ToolParam(description = "Last local date to include, yyyy-MM-dd", required = false)
+            String to,
+            @ToolParam(description = "Sport type filter, e.g. Ride, VirtualRide, Swim, Walk, Run", required = false)
+            String type) {
         int size = (limit == null || limit <= 0) ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
-        return activityRepository.findAllByOrderByStartDateDesc(PageRequest.of(0, size))
+        DateRange range = DateRange.of(from, to, zone());
+        String sport = type == null ? "" : type.trim();
+        return activityRepository.findFiltered(range.from(), range.to(), sport, PageRequest.of(0, size))
+                .stream()
                 .map(RecentActivityDto::from)
-                .getContent();
+                .toList();
     }
 
-    @Tool(description = "Get full trainer-ready detail for a single cycling ride by its Strava activity id, " +
-            "including heart rate/power/cadence stats and a per-lap breakdown. Laps carry startSec/endSec/elapsedTimeSec " +
+    private ZoneId zone() {
+        return (timezone == null || timezone.isBlank()) ? ZoneId.systemDefault() : ZoneId.of(timezone.trim());
+    }
+
+    @Tool(description = "Get full trainer-ready detail for a single activity (ride, trainer ride, swim, walk, run, ...) " +
+            "by its Strava activity id, including heart rate/power/cadence stats and a per-lap breakdown. Laps carry startSec/endSec/elapsedTimeSec " +
             "(seconds from activity start) and startIndex/endIndex into the streams. bestPower holds the best average " +
-            "power for 5s..60min windows, only for real (sensor/trainer) power.")
-    public TrainerRideDto getRide(@ToolParam(description = "Strava activity id") Long stravaId) {
+            "power for 5s..60min windows, only for real (sensor/trainer) power. stops lists stops of 20 s or more.")
+    public TrainerRideDto getActivity(@ToolParam(description = "Strava activity id") Long stravaId) {
         return activityService.fetchAndCacheDetails(stravaId)
                 .flatMap(a -> activityService.fetchAndCacheStreams(stravaId))
                 .map(activityService::buildTrainerRideDto)
                 .orElseThrow(() -> new IllegalArgumentException("Activity not found: " + stravaId));
     }
 
-    @Tool(description = "Get full trainer-ready detail for multiple cycling rides at once, by Strava activity ids. " +
-            "Unknown ids are silently skipped.")
-    public List<TrainerRideDto> getRides(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
-        return stravaIds.stream()
-                .map(id -> activityService.fetchAndCacheDetails(id)
+    @Tool(description = "Get full trainer-ready detail (same as getActivity) for multiple activities at once, " +
+            "by Strava activity ids. Returns {activities, failed}: activities that could be loaded, in request order, " +
+            "and failed = [{stravaId, reason}] for ids that are unknown or whose details are not stored. " +
+            "One bad id never fails the whole call.")
+    public ActivitiesBatchDto getActivities(@ToolParam(description = "List of Strava activity ids") List<Long> stravaIds) {
+        List<TrainerRideDto> loaded = new ArrayList<>();
+        List<ActivitiesBatchDto.Failure> failed = new ArrayList<>();
+        for (Long id : stravaIds == null ? List.<Long>of() : stravaIds) {
+            try {
+                activityService.fetchAndCacheDetails(id)
                         .flatMap(a -> activityService.fetchAndCacheStreams(id))
                         .map(activityService::buildTrainerRideDto)
-                        .orElse(null))
-                .filter(Objects::nonNull)
-                .toList();
+                        .ifPresentOrElse(loaded::add,
+                                () -> failed.add(new ActivitiesBatchDto.Failure(id, "Activity not found")));
+            } catch (StravaDetailsUnavailableException | IllegalArgumentException e) {
+                failed.add(new ActivitiesBatchDto.Failure(id, e.getMessage()));
+            }
+        }
+        return new ActivitiesBatchDto(loaded, failed);
     }
 
     @Tool(description = "Get per-second streams of an activity as equal-length arrays, one per requested stream. " +
@@ -67,7 +99,7 @@ public class ActivityMcpTools {
             "moving (0/1, derived from speed), temp (usually unavailable; listed in 'unavailable'). " +
             "Without resolution the response is capped at 2000 points (downsampled by averaging). " +
             "Use fromSec/toSec to read one interval at full resolution.")
-    public RideStreamsDto getRideStreams(
+    public RideStreamsDto getActivityStreams(
             @ToolParam(description = "Strava activity id") Long stravaId,
             @ToolParam(description = "Streams to return, e.g. [\"time\",\"heartrate\",\"watts\"]") List<String> streams,
             @ToolParam(description = "Max number of points after downsampling (e.g. 500). Default cap 2000.", required = false)

@@ -6,6 +6,7 @@ import xyz.zlov.app.strava.activity.dto.RideStreamsDto;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto;
 import xyz.zlov.app.strava.activity.dto.TrainerRideDto;
 import xyz.zlov.app.strava.fit.FitParser;
+import xyz.zlov.app.strava.mcp.dto.RecentActivityDto;
 
 import java.io.InputStream;
 import java.util.List;
@@ -65,6 +66,9 @@ class TrainerFitIntegrationTest {
         assertNotNull(l2.startIndex());
         assertTrue(l2.endIndex() > l2.startIndex());
 
+        assertTrue(dto.hasDeviceWatts());
+        assertNotNull(dto.watts());
+        assertNotNull(dto.laps().get(1).watts());
         assertNotNull(dto.bestPower());
         double p5s = dto.bestPower().get("5s");
         double p1min = dto.bestPower().get("1min");
@@ -131,5 +135,122 @@ class TrainerFitIntegrationTest {
         assertThrows(IllegalArgumentException.class, () -> analysis.getTimeInZones(TRAINER_ID, List.of(150, 120), null, null, null, null));
         assertThrows(IllegalArgumentException.class, () -> analysis.getStreams(999L, List.of("time"), null, null, null));
         assertThrows(IllegalArgumentException.class, () -> analysis.getStreams(TRAINER_ID, List.of(), null, null, null));
+    }
+
+    @Test
+    void estimatedPowerIsHiddenAndRealPowerOutdoorIsShown() throws Exception {
+        // Outdoor ride, Strava-estimated watts: trainer=false, device_watts=false
+        Activity estimated = parse("/fit/19166201899.fit", OUTDOOR_ID);
+        estimated.setAverageWatts(150.0);
+        estimated.setActivityRaw("{\"max_watts\":300.0,\"device_watts\":false}");
+        estimated.setLapsRaw("[{\"lap_index\":1,\"distance\":1000.0,\"average_watts\":150.0,\"start_index\":0,\"end_index\":100}]");
+
+        TrainerRideDto hidden = activityService.buildTrainerRideDto(estimated);
+        assertFalse(hidden.hasDeviceWatts());
+        assertNull(hidden.watts(), "estimated power must be hidden");
+        assertNull(hidden.laps().getFirst().watts());
+        assertNull(hidden.bestPower());
+
+        RecentActivityDto listed = RecentActivityDto.from(estimated);
+        assertFalse(listed.hasDeviceWatts());
+        assertNull(listed.averageWatts());
+
+        // Same ride with a real power meter (device_watts=true)
+        estimated.setActivityRaw("{\"max_watts\":300.0,\"device_watts\":true}");
+        TrainerRideDto shown = activityService.buildTrainerRideDto(estimated);
+        assertTrue(shown.hasDeviceWatts());
+        assertEquals(150.0, shown.watts().avg());
+        assertEquals(150.0, shown.laps().getFirst().watts().avg());
+        assertEquals(150.0, RecentActivityDto.from(estimated).averageWatts());
+
+        // Summary-only outdoor row (no activity_raw yet): there is power but its origin is unknown -> null, hidden
+        estimated.setActivityRaw(null);
+        RecentActivityDto unknown = RecentActivityDto.from(estimated);
+        assertNull(unknown.hasDeviceWatts());
+        assertNull(unknown.averageWatts());
+    }
+
+    private static Activity summary(String type, String sportType, Boolean trainer, Double avgWatts, Double avgHr) {
+        Activity a = new Activity();
+        a.setStravaId(1L);
+        a.setName("x");
+        a.setType(type);
+        a.setSportType(sportType);
+        a.setTrainer(trainer);
+        a.setAverageWatts(avgWatts);
+        a.setAverageHeartrate(avgHr);
+        a.setStartDate(java.time.Instant.parse("2026-10-27T15:10:51Z"));
+        return a;
+    }
+
+    @Test
+    void virtualRideWithoutDetailsHasRealPower() {
+        // old Strava-synced MyWhoosh ride: trainer flag empty, no activity_raw, but power is there
+        RecentActivityDto d = RecentActivityDto.from(summary("VirtualRide", "VirtualRide", false, 131.04, 125.7));
+
+        assertEquals(Boolean.TRUE, d.hasDeviceWatts());
+        assertEquals(131.0, d.averageWatts());
+        assertEquals(125.7, d.averageHeartrate());
+        // falls back to type when sport_type is empty
+        assertEquals(Boolean.TRUE, RecentActivityDto.from(summary("VirtualRide", null, false, 100.0, null)).hasDeviceWatts());
+    }
+
+    @Test
+    void activitiesWithoutPowerNeverClaimDeviceWatts() {
+        // Strava sometimes flags swims/walks (trainer or device_watts) although there is no power
+        Activity swim = summary("Swim", "Swim", true, null, 110.0);
+        swim.setActivityRaw("{\"device_watts\":true}");
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(swim).hasDeviceWatts());
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(summary("Walk", "Walk", false, null, 90.0)).hasDeviceWatts());
+        // a VirtualRide with no power at all
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(summary("VirtualRide", "VirtualRide", false, null, 100.0)).hasDeviceWatts());
+    }
+
+    @Test
+    void averagesAreRoundedToTenthsEverywhere() throws Exception {
+        assertEquals(85.8, RecentActivityDto.from(summary("Walk", "Walk", false, null, 85.82336956521739)).averageHeartrate());
+        assertEquals(125.0, RecentActivityDto.from(summary("Ride", "Ride", false, null, 125.0)).averageHeartrate());
+
+        Activity a = parse("/fit/19166201899.fit", OUTDOOR_ID);
+        a.setAverageHeartrate(133.33333);
+        a.setActivityRaw("{\"average_heartrate\":133.33333,\"max_heartrate\":159.0}");
+        a.setLapsRaw("[{\"lap_index\":1,\"distance\":1000.0,\"average_heartrate\":120.66666,\"max_heartrate\":150.0,\"average_cadence\":76.44444,\"start_index\":0,\"end_index\":100}]");
+        TrainerRideDto dto = activityService.buildTrainerRideDto(a);
+
+        assertEquals(133.3, dto.heartrate().avg());
+        assertEquals(120.7, dto.laps().getFirst().heartrate().avg());
+        assertEquals(76.4, dto.laps().getFirst().cadence().avg());
+    }
+
+    @Test
+    void trainerRideListsPowerAsReal() {
+        RecentActivityDto listed = RecentActivityDto.from(trainer);
+        assertTrue(listed.hasDeviceWatts());
+        assertNotNull(listed.averageWatts());
+    }
+
+    @Test
+    void trainerLapsGetElevationFromAltitudeStream() {
+        TrainerRideDto dto = activityService.buildTrainerRideDto(trainer);
+
+        double sum = 0;
+        for (TrainerRideDto.LapDto lap : dto.laps()) {
+            assertNotNull(lap.elevationGain(), "lap " + lap.lapNum() + " has no elevation");
+            assertTrue(lap.elevationGain() >= 0);
+            sum += lap.elevationGain();
+        }
+        // session ascent is 386 m; lap sums must be in the same ballpark
+        assertEquals(trainer.getTotalElevationGain(), sum, trainer.getTotalElevationGain() * 0.15,
+                "sum of lap gains " + sum + " vs session " + trainer.getTotalElevationGain());
+    }
+
+    @Test
+    void stopsAreExposed() {
+        assertNotNull(activityService.buildTrainerRideDto(trainer).stops());
+        TrainerRideDto outdoorDto = activityService.buildTrainerRideDto(outdoor);
+        assertNotNull(outdoorDto.stops());
+        // outdoor ride is 8867 s elapsed vs 8036 s moving: there must be stops
+        assertFalse(outdoorDto.stops().isEmpty(), "outdoor ride should have stops");
+        outdoorDto.stops().forEach(st -> assertTrue(st.durationSec() >= 20));
     }
 }

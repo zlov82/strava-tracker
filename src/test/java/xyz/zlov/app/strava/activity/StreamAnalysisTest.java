@@ -7,7 +7,9 @@ import org.junit.jupiter.api.Test;
 import xyz.zlov.app.strava.activity.analysis.LapBounds;
 import xyz.zlov.app.strava.activity.analysis.PowerCurve;
 import xyz.zlov.app.strava.activity.analysis.StreamData;
+import xyz.zlov.app.strava.activity.analysis.StopDetector;
 import xyz.zlov.app.strava.activity.analysis.StreamSampler;
+import xyz.zlov.app.strava.activity.dto.TrainerRideDto.Stop;
 import xyz.zlov.app.strava.activity.analysis.ZoneCalculator;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto.Distribution;
 import xyz.zlov.app.strava.activity.dto.TimeInZonesDto.ThresholdShare;
@@ -169,5 +171,43 @@ class StreamAnalysisTest {
 
         var noIndex = MAPPER.readTree("{\"lap_index\":3}");
         assertNull(LapBounds.of(noIndex, d, 3).startIndex());
+    }
+
+    @Test
+    void stopsAreReportedOnlyFromTwentySeconds() {
+        // moving 0..59, stopped 60..89 (30 s), moving 90..149, stopped 150..159 (10 s, too short), moving 160..199
+        StreamData d = streams(200, i -> 0, i -> 120, i -> (i >= 60 && i < 90) || (i >= 150 && i < 160) ? 0 : 5);
+        List<Stop> stops = StopDetector.detect(d, StopDetector.MIN_STOP_SEC);
+
+        assertEquals(1, stops.size());
+        assertEquals(60, stops.getFirst().startSec());
+        assertEquals(30, stops.getFirst().durationSec());
+        assertEquals(300.0, stops.getFirst().atDistanceM(), 0.001); // distance = 5 m/s * 60 s
+    }
+
+    @Test
+    void recordingGapCountsAsStop() {
+        // moving 0..59, then the timer pauses for 2 minutes, then moving again
+        ObjectNode root = MAPPER.createObjectNode();
+        ArrayNode time = MAPPER.createArrayNode();
+        ArrayNode speed = MAPPER.createArrayNode();
+        for (int i = 0; i < 60; i++) { time.add(i); speed.add(5); }
+        for (int i = 0; i < 30; i++) { time.add(180 + i); speed.add(5); }
+        root.set("time", MAPPER.createObjectNode().set("data", time));
+        root.set("velocity_smooth", MAPPER.createObjectNode().set("data", speed));
+        List<Stop> stops = StopDetector.detect(StreamData.parse(root.toString()), StopDetector.MIN_STOP_SEC);
+
+        assertEquals(1, stops.size());
+        assertEquals(59, stops.getFirst().startSec());
+        assertEquals(121, stops.getFirst().durationSec());
+        assertNull(stops.getFirst().atDistanceM(), "no distance stream -> no distance");
+    }
+
+    @Test
+    void elevationGainSumsOnlyClimbs() {
+        // altitude rises 0.5 m/s: 20 s -> 10 m gain in any 21-point slice
+        StreamData d = streams(100, i -> 0, i -> 120, i -> 5);
+        assertEquals(10.0, d.elevationGain(10, 30), 0.001);
+        assertEquals(0.0, d.elevationGain(5, 5), 0.001);
     }
 }
