@@ -163,9 +163,63 @@ class TrainerFitIntegrationTest {
         assertEquals(150.0, shown.laps().getFirst().watts().avg());
         assertEquals(150.0, RecentActivityDto.from(estimated).averageWatts());
 
-        // Summary-only row (no activity_raw yet) and not a trainer ride: unknown counts as not real
+        // Summary-only outdoor row (no activity_raw yet): there is power but its origin is unknown -> null, hidden
         estimated.setActivityRaw(null);
-        assertFalse(RecentActivityDto.from(estimated).hasDeviceWatts());
+        RecentActivityDto unknown = RecentActivityDto.from(estimated);
+        assertNull(unknown.hasDeviceWatts());
+        assertNull(unknown.averageWatts());
+    }
+
+    private static Activity summary(String type, String sportType, Boolean trainer, Double avgWatts, Double avgHr) {
+        Activity a = new Activity();
+        a.setStravaId(1L);
+        a.setName("x");
+        a.setType(type);
+        a.setSportType(sportType);
+        a.setTrainer(trainer);
+        a.setAverageWatts(avgWatts);
+        a.setAverageHeartrate(avgHr);
+        a.setStartDate(java.time.Instant.parse("2026-10-27T15:10:51Z"));
+        return a;
+    }
+
+    @Test
+    void virtualRideWithoutDetailsHasRealPower() {
+        // old Strava-synced MyWhoosh ride: trainer flag empty, no activity_raw, but power is there
+        RecentActivityDto d = RecentActivityDto.from(summary("VirtualRide", "VirtualRide", false, 131.04, 125.7));
+
+        assertEquals(Boolean.TRUE, d.hasDeviceWatts());
+        assertEquals(131.0, d.averageWatts());
+        assertEquals(125.7, d.averageHeartrate());
+        // falls back to type when sport_type is empty
+        assertEquals(Boolean.TRUE, RecentActivityDto.from(summary("VirtualRide", null, false, 100.0, null)).hasDeviceWatts());
+    }
+
+    @Test
+    void activitiesWithoutPowerNeverClaimDeviceWatts() {
+        // Strava sometimes flags swims/walks (trainer or device_watts) although there is no power
+        Activity swim = summary("Swim", "Swim", true, null, 110.0);
+        swim.setActivityRaw("{\"device_watts\":true}");
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(swim).hasDeviceWatts());
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(summary("Walk", "Walk", false, null, 90.0)).hasDeviceWatts());
+        // a VirtualRide with no power at all
+        assertEquals(Boolean.FALSE, RecentActivityDto.from(summary("VirtualRide", "VirtualRide", false, null, 100.0)).hasDeviceWatts());
+    }
+
+    @Test
+    void averagesAreRoundedToTenthsEverywhere() throws Exception {
+        assertEquals(85.8, RecentActivityDto.from(summary("Walk", "Walk", false, null, 85.82336956521739)).averageHeartrate());
+        assertEquals(125.0, RecentActivityDto.from(summary("Ride", "Ride", false, null, 125.0)).averageHeartrate());
+
+        Activity a = parse("/fit/19166201899.fit", OUTDOOR_ID);
+        a.setAverageHeartrate(133.33333);
+        a.setActivityRaw("{\"average_heartrate\":133.33333,\"max_heartrate\":159.0}");
+        a.setLapsRaw("[{\"lap_index\":1,\"distance\":1000.0,\"average_heartrate\":120.66666,\"max_heartrate\":150.0,\"average_cadence\":76.44444,\"start_index\":0,\"end_index\":100}]");
+        TrainerRideDto dto = activityService.buildTrainerRideDto(a);
+
+        assertEquals(133.3, dto.heartrate().avg());
+        assertEquals(120.7, dto.laps().getFirst().heartrate().avg());
+        assertEquals(76.4, dto.laps().getFirst().cadence().avg());
     }
 
     @Test

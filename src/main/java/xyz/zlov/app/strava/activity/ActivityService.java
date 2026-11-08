@@ -152,7 +152,8 @@ public class ActivityService {
             }
         }
 
-        boolean realPower = PowerSource.isReal(activity);
+        Boolean hasDeviceWatts = PowerSource.hasDeviceWatts(activity);
+        boolean realPower = Boolean.TRUE.equals(hasDeviceWatts);
         StreamData streamData = null;
         if (activity.getStreamsRaw() != null) {
             try {
@@ -250,7 +251,7 @@ public class ActivityService {
                 activity.getDescription(),
                 Boolean.TRUE.equals(activity.getCommute()),
                 Boolean.TRUE.equals(activity.getTrainer()),
-                realPower,
+                hasDeviceWatts,
                 bestPower,
                 stops
         );
