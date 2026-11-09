@@ -39,15 +39,19 @@ export default function ActivityLaps({ lapsRaw, type, loading }) {
 
   const hasHr      = laps.some(l => l.average_heartrate);
   const hasCadence = laps.some(l => l.average_cadence);
+  // Swim laps: the watch pauses its timer (moving_time), so moving_time/pace per lap is meaningless
+  // (e.g. 25 m "in 4 s" while the lap took 31 s). Show full lap time and no per-lap pace.
+  const isSwim = type === 'Swim';
 
   return (
+    <>
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
       <thead>
         <tr style={{ background: C_SURF2 }}>
           <Th>#</Th>
           <Th>Дист</Th>
           <Th>Время</Th>
-          <Th>{type === 'Ride' ? 'Скорость' : 'Темп'}</Th>
+          {!isSwim && <Th>{type === 'Ride' ? 'Скорость' : 'Темп'}</Th>}
           {hasHr      && <Th>Пульс</Th>}
           {hasCadence && <Th>Каденс</Th>}
         </tr>
@@ -57,14 +61,20 @@ export default function ActivityLaps({ lapsRaw, type, loading }) {
           <tr key={lap.id ?? i} style={{ borderTop: `1px solid ${C_BORDER}`, background: i % 2 === 1 ? C_SURF2 : 'transparent' }}>
             <Td muted>{lap.lap_index ?? i + 1}</Td>
             <Td>{fmtDist(lap.distance, type)}</Td>
-            <Td>{fmtTime(lap.moving_time)}</Td>
-            <Td>{fmtPace(lap.average_speed, type)}</Td>
+            <Td>{fmtTime(isSwim ? Math.round(lap.elapsed_time ?? lap.moving_time) : lap.moving_time)}</Td>
+            {!isSwim && <Td>{fmtPace(lap.average_speed, type)}</Td>}
             {hasHr      && <Td>{lap.average_heartrate ? `${Math.round(lap.average_heartrate)}` : '—'}</Td>}
             {hasCadence && <Td>{lap.average_cadence  ? `${Math.round(lap.average_cadence)}`  : '—'}</Td>}
           </tr>
         ))}
       </tbody>
     </table>
+    {isSwim && (
+      <div style={{ fontSize: 11, color: C_MUTED, padding: '10px 12px' }}>
+        Время круга полное (с паузами). Темп по кругам не показывается: часы ставят таймер на паузу, а дистанции кругов в файле неточны.
+      </div>
+    )}
+    </>
   );
 }
 

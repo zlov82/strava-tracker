@@ -29,11 +29,12 @@ const fetchSync       = () => api.get("/api/sync/status").then(r => r.data);
 const normalize = (a) => ({
   ...a,
   start_date:    a.startDate,
-  distance:      Math.round(a.distanceKm * 1000),
+  // exact values first: distanceKm / *Kmh are rounded to 0.1 and distort swims (1050 m -> 1.1 km, pace 3:24 -> 3:20)
+  distance:      a.distanceM ?? Math.round(a.distanceKm * 1000),
   moving_time:   a.movingTimeSec,
   elapsed_time:  a.elapsedTimeSec,
-  average_speed: a.averageSpeedKmh ? a.averageSpeedKmh / 3.6 : 0,
-  max_speed:     a.maxSpeedKmh ? a.maxSpeedKmh / 3.6 : null,
+  average_speed: a.averageSpeedMs ?? (a.averageSpeedKmh ? a.averageSpeedKmh / 3.6 : 0),
+  max_speed:     a.maxSpeedMs ?? (a.maxSpeedKmh ? a.maxSpeedKmh / 3.6 : null),
   type:          a.type === "VirtualRide" ? "Ride" : a.type,
 });
 

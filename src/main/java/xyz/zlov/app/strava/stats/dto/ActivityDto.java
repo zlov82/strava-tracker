@@ -12,11 +12,16 @@ public record ActivityDto(
         String sportType,
         Instant startDate,
         double distanceKm,
+        /** Exact distance in meters (distanceKm is rounded to 0.1 km and loses precision, e.g. for swims). */
+        double distanceM,
         int movingTimeSec,
         int elapsedTimeSec,
         double elevationM,
         Double averageSpeedKmh,
         Double maxSpeedKmh,
+        /** Exact speeds in m/s (the km/h fields are rounded to 0.1 and distort swim pace). */
+        Double averageSpeedMs,
+        Double maxSpeedMs,
         Double averageHeartrate,
         Double maxHeartrate,
         Double averageCadence,
